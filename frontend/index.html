@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Intelligent Code Editor</title>
+    <script>
+     (function() {
+       const theme = localStorage.getItem('theme') || 'dark';
+       document.documentElement.setAttribute('data-theme', theme);
+     })();
+    </script>
+    <link rel="stylesheet" href="style.css" />
+    <!-- jsTree CSS -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css"
+    />
+  </head>
+  <body>
+    <div class="container" id="split-container">
+      <div id="file-tree-container" class="sidebar">
+        <h2 style="margin: 0px 0px 5px 0px;">Project Files</h2>
+        <div id="directory-controls">
+          <button id="open-directory-button">Open Folder</button>
+          <button id="reconnect-button" style="display: none;">Reconnect</button>
+          <button id="forget-folder-button" style="display: none;">Forget Folder</button>
+        </div>
+        <div id="file-tree"></div>
+      </div>
+      <div id="editor-container" class="main-content">
+        <div id="tab-bar"></div>
+        <div id="editor"></div>
+      </div>
+      <div id="chat-panel" class="sidebar">
+        <div class="chat-header">
+          <h2>AI Chat</h2>
+          <div class="toolbar-group" id="token-usage-display" style="display: flex;">
+            <span id="token-request">Req: 3333</span>
+            <span id="token-response">Res: 2241</span>
+            <span id="token-total">Total: 5574</span>
+          </div>
+        </div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-container">
+          <div id="chat-toolbar">
+            <div class="toolbar-group">
+              <select id="model-selector" title="Select AI Model">
+                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                <option value="gemma-3-27b-it">Gemma 3 27B</option>
+              </select>
+              <select id="agent-mode-selector" title="Select Agent Mode">
+                <option value="code" selected>Code</option>
+                <option value="plan">GenAI Search</option>
+              </select>
+            </div>
+            <div class="toolbar-group">
+              <div class="dropdown">
+                <button class="dropdown-button">Context</button>
+                <div class="dropdown-content">
+                  <button id="view-context-button">View Context</button>
+                  <button id="condense-context-button">Condense Context</button>
+                  <button id="clear-context-button">Clear Context</button>
+                </div>
+              </div>
+              <button id="format-button">Format Document</button>
+              <button id="view-checkpoints-button">Checkpoints</button>
+              <button id="custom-rules-button">Custom Rules</button>
+              <button id="toggle-files-button">Toggle Files</button>
+            </div>
+          </div>
+          <div id="image-preview-container" style="display: none"></div>
+          <textarea
+            id="chat-input"
+            placeholder="Type your message..."
+          ></textarea>
+          <div id="chat-actions">
+            <input
+              type="file"
+              id="image-input"
+              accept="image/*"
+              style="display: none"
+            />
+            <button id="image-upload-button">📎</button>
+            <button id="chat-send-button">Send</button>
+            <button id="chat-cancel-button" style="display: none">
+              Cancel
+            </button>
+            <div id="thinking-indicator" style="display: none"></div>
+          </div>
+        </div>
+        <details id="chat-settings">
+          <summary>API Key Settings</summary>
+          <p>
+            Enter one or more Gemini API keys, separated by new lines. They will
+            be stored locally and rotated automatically if one fails.
+          </p>
+          <textarea
+            id="api-keys-textarea"
+            placeholder="Enter API keys here..."
+          ></textarea>
+          <div id="rate-limiter-setting">
+            <label for="rate-limit-slider">Request Delay (seconds):</label>
+            <input type="range" id="rate-limit-slider" min="0" max="300" value="5" />
+            <input type="number" id="rate-limit-input" min="0" max="300" value="5" />
+          </div>
+          <button id="save-keys-button">Save Keys</button>
+          <button id="theme-toggle-button">🌓</button>
+                 </details>
+               </div>
+             </div>
+
+    <div id="context-modal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Current Conversation Context</h2>
+        <pre id="context-display"></pre>
+      </div>
+    </div>
+
+    <div id="checkpoints-modal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Project Checkpoints</h2>
+        <button id="create-checkpoint-button">Create New Checkpoint</button>
+        <div id="checkpoints-list"></div>
+      </div>
+    </div>
+
+    <div id="custom-rules-modal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Custom Rules for <span id="custom-rules-mode-name"></span> Mode</h2>
+        <p>These rules will be added to the system prompt for the selected AI mode.</p>
+        <textarea id="custom-rules-textarea" placeholder="Enter custom rules here..."></textarea>
+        <button id="save-custom-rules-button">Save Rules</button>
+      </div>
+    </div>
+
+    <!-- Load diff.js before Monaco loader to ensure Diff is globally available -->
+    <script src="https://cdn.jsdelivr.net/npm/diff@5.1.0/dist/diff.min.js"></script>
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
+    <script src="js/vendor/split.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.3.8/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/acorn@8.12.1/dist/acorn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@9/dist/mermaid.min.js"></script>
+    <!-- jQuery and jsTree -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <script>
+      mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    </script>
+    <script type="module">
+      import { GoogleGenerativeAI } from 'https://esm.run/@google/generative-ai';
+      window.GoogleGenerativeAI = GoogleGenerativeAI;
+    </script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

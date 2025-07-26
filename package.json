@@ -1,0 +1,16 @@
+{
+  "name": "ai-code-editor-server",
+  "version": "1.0.0",
+  "description": "A local server to run the AI Code Editor.",
+  "main": "index.js",
+  "scripts": {
+    "start": "pm2 start backend/index.js --name ai-editor",
+    "stop": "pm2 stop ai-editor",
+    "restart": "pm2 restart ai-editor",
+    "delete": "pm2 delete ai-editor"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "jest": "^29.7.0"
+  }
+}
