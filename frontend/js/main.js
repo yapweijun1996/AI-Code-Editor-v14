@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const customRulesTextarea = document.getElementById('custom-rules-textarea');
     const saveCustomRulesButton = document.getElementById('save-custom-rules-button');
     const customRulesModeName = document.getElementById('custom-rules-mode-name');
+    const fixErrorsButton = document.getElementById('fix-errors-button');
 
     // --- State ---
     let rootDirectoryHandle = null;
@@ -415,6 +416,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const newTheme = currentTheme === 'light' ? 'dark' : 'light';
             applyTheme(newTheme);
         });
+
+        fixErrorsButton.addEventListener('click', () => handleFixErrors());
         
         // --- Dropdown Logic ---
         const dropdownButton = document.querySelector('.dropdown-button');
@@ -433,6 +436,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     initializeEventListeners();
+
+    // --- Feature Functions ---
+    function handleFixErrors() {
+        const activeFilePath = Editor.getActiveFilePath();
+        if (!activeFilePath) {
+            UI.showError('Please open a file to fix errors in.');
+            return;
+        }
+
+        const errorDetails = Editor.getFormattedErrors(activeFilePath);
+
+        if (!errorDetails) {
+            UI.showError('No errors found in the current file.');
+            return;
+        }
+
+        const prompt = `
+The following errors have been detected in the file \`${activeFilePath}\`. Please fix them.
+
+**Errors:**
+\`\`\`
+${errorDetails}
+\`\`\`
+
+Analyze the code and provide the necessary changes to resolve these issues.
+        `;
+
+        chatInput.value = prompt.trim();
+        GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
+    }
 
     // Relayout panels after a short delay to fix initialization issue
     setTimeout(() => UI.relayout(editor), 100);

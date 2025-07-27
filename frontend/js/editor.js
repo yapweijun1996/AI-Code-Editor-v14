@@ -310,5 +310,16 @@ export function getModelMarkers(filePath) {
     if (!fileData || !fileData.model) {
         return [];
     }
-    return monaco.editor.getModelMarkers({ owner: 'default', resource: fileData.model.uri });
+    return monaco.editor.getModelMarkers({ resource: fileData.model.uri });
+}
+
+export function getFormattedErrors(filePath) {
+    const markers = getModelMarkers(filePath);
+    const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
+
+    if (errors.length === 0) {
+        return null;
+    }
+
+    return errors.map(e => `- Line ${e.startLineNumber}, Col ${e.startColumn}: ${e.message}`).join('\n');
 }
