@@ -227,11 +227,17 @@ export const GeminiChat = {
     },
 
 
-    async sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, uploadedImage, clearImagePreview) {
-        // Always restart the chat session to ensure the latest custom rules are applied.
-        const historyToPreserve = this.chatSession ? await this.chatSession.getHistory() : [];
-        await this._restartSessionWithHistory(historyToPreserve);
+    _updateUiState(isSending) {
+        const chatSendButton = document.getElementById('chat-send-button');
+        const chatCancelButton = document.getElementById('chat-cancel-button');
+        const thinkingIndicator = document.getElementById('thinking-indicator');
 
+        chatSendButton.style.display = isSending ? 'none' : 'inline-block';
+        chatCancelButton.style.display = isSending ? 'inline-block' : 'none';
+        thinkingIndicator.style.display = isSending ? 'block' : 'none';
+    },
+
+    async _handleRateLimiting(chatMessages) {
         const now = Date.now();
         const timeSinceLastRequest = now - this.lastRequestTime;
         const rateLimitMs = this.rateLimit;
@@ -241,26 +247,16 @@ export const GeminiChat = {
             UI.appendMessage(chatMessages, `Rate limit active. Waiting for ${Math.ceil(delay / 1000)}s...`, 'ai');
             await new Promise(resolve => setTimeout(resolve, delay));
         }
-
-        const userPrompt = chatInput.value.trim();
-        if ((!userPrompt && !uploadedImage) || this.isSending) return;
-
-        if (!this.chatSession) {
-            await this._startChat();
-            if (!this.chatSession) return;
-        }
-
         this.lastRequestTime = Date.now();
+    },
 
-        this.isSending = true;
-        this.isCancelled = false;
-        chatSendButton.style.display = 'none';
-        chatCancelButton.style.display = 'inline-block';
-        thinkingIndicator.style.display = 'block';
-
+    _prepareAndRenderUserMessage(chatInput, chatMessages, uploadedImage, clearImagePreview) {
+        const userPrompt = chatInput.value.trim();
         let displayMessage = userPrompt;
         const initialParts = [];
+
         if (userPrompt) initialParts.push({ text: userPrompt });
+
         if (uploadedImage) {
             displayMessage += `\n📷 Attached: ${uploadedImage.name}`;
             initialParts.push({
@@ -270,100 +266,117 @@ export const GeminiChat = {
                 },
             });
         }
+
         UI.appendMessage(chatMessages, displayMessage.trim(), 'user');
         chatInput.value = '';
         clearImagePreview();
-
         console.log(`[User Query] ${userPrompt}`);
 
-        try {
-            let promptParts = initialParts;
-            let running = true;
-            
-            ApiKeyManager.resetTriedKeys();
+        return initialParts;
+    },
 
-            while (running && !this.isCancelled) {
-                const modelName = document.getElementById('model-selector').value;
-                try {
-                    console.log(
-                        `[AI Turn] Attempting to send with key index: ${ApiKeyManager.currentIndex} using model: ${modelName}`,
-                    );
+    async _performApiCall(initialParts, chatMessages) {
+        let promptParts = initialParts;
+        let running = true;
+        ApiKeyManager.resetTriedKeys();
 
-                    // Count request tokens
-                    if (!this.model) throw new Error('Model not initialized for token counting.');
-                    const requestTokenResult = await this.model.countTokens({ contents: [{ role: 'user', parts: promptParts }] });
+        while (running && !this.isCancelled) {
+            const modelName = document.getElementById('model-selector').value;
+            try {
+                console.log(`[AI Turn] Attempting to send with key index: ${ApiKeyManager.currentIndex} using model: ${modelName}`);
 
-                    const result = await this.chatSession.sendMessageStream(promptParts);
+                if (!this.model) throw new Error('Model not initialized for token counting.');
+                const requestTokenResult = await this.model.countTokens({ contents: [{ role: 'user', parts: promptParts }] });
 
-                    let fullResponseText = '';
-                    let functionCalls = [];
+                const result = await this.chatSession.sendMessageStream(promptParts);
 
-                    for await (const chunk of result.stream) {
-                        if (this.isCancelled) break;
-                        const chunkText = chunk.text();
-                        if (chunkText) {
-                            fullResponseText += chunkText;
-                            UI.appendMessage(chatMessages, fullResponseText, 'ai', true);
-                        }
-                        const chunkFunctionCalls = chunk.functionCalls();
-                        if (chunkFunctionCalls) {
-                            functionCalls.push(...chunkFunctionCalls);
-                        }
-                    }
+                let fullResponseText = '';
+                let functionCalls = [];
 
+                for await (const chunk of result.stream) {
                     if (this.isCancelled) break;
-
-                    if (fullResponseText) {
-                        console.log('[AI Reply]', fullResponseText);
+                    const chunkText = chunk.text();
+                    if (chunkText) {
+                        fullResponseText += chunkText;
+                        UI.appendMessage(chatMessages, fullResponseText, 'ai', true);
                     }
-
-                    // Count response tokens
-                    const responseTokenResult = await this.model.countTokens({
-                        contents: [{ role: 'model', parts: [{ text: fullResponseText }] }],
-                    });
-
-                    UI.updateTokenDisplay(requestTokenResult.totalTokens, responseTokenResult.totalTokens);
-
-                    if (functionCalls.length > 0) {
-                        const toolPromises = functionCalls.map((call) =>
-                            ToolExecutor.execute(call, this.rootDirectoryHandle),
-                        );
-                        const toolResults = await Promise.all(toolPromises);
-                        promptParts = toolResults.map((toolResult) => ({
-                            functionResponse: {
-                                name: toolResult.toolResponse.name,
-                                response: toolResult.toolResponse.response,
-                            },
-                        }));
-                    } else {
-                        // This is the final turn, a text response is expected.
-                        if (!fullResponseText) {
-                            const errorMessage = `[The AI model returned an empty response, which usually indicates a problem with the data it received from a tool. Please check the tool's output in the console for anything unexpected (like a file being too large or having strange content) and try your request again.]`;
-                            UI.appendMessage(chatMessages, errorMessage, 'ai');
-                            console.error('AI returned an empty response after a tool call. This is often caused by problematic tool output.');
-                        }
-                        running = false;
-                    }
-                } catch (error) {
-                    console.error('An error occurred during the AI turn:', error);
-                    ApiKeyManager.rotateKey();
-
-                    if (ApiKeyManager.hasTriedAllKeys()) {
-                        UI.appendMessage(chatMessages, 'All API keys failed. Please check your keys in the settings.', 'ai');
-                        console.error('All available API keys have failed.');
-                        running = false;
-                    } else {
-                        const delay = this.rateLimit;
-                        UI.appendMessage(chatMessages, `API key failed. Waiting for ${Math.ceil(delay / 1000)}s before retrying...`, 'ai');
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        
-                        const history = this.chatSession ? await this.chatSession.getHistory() : [];
-                        await this._restartSessionWithHistory(history);
-                        
-                        this.lastRequestTime = Date.now();
+                    const chunkFunctionCalls = chunk.functionCalls();
+                    if (chunkFunctionCalls) {
+                        functionCalls.push(...chunkFunctionCalls);
                     }
                 }
+
+                if (this.isCancelled) break;
+
+                if (fullResponseText) {
+                    console.log('[AI Reply]', fullResponseText);
+                }
+
+                const responseTokenResult = await this.model.countTokens({
+                    contents: [{ role: 'model', parts: [{ text: fullResponseText }] }],
+                });
+                UI.updateTokenDisplay(requestTokenResult.totalTokens, responseTokenResult.totalTokens);
+
+                if (functionCalls.length > 0) {
+                    const toolPromises = functionCalls.map((call) => ToolExecutor.execute(call, this.rootDirectoryHandle));
+                    const toolResults = await Promise.all(toolPromises);
+                    promptParts = toolResults.map((toolResult) => ({
+                        functionResponse: {
+                            name: toolResult.toolResponse.name,
+                            response: toolResult.toolResponse.response,
+                        },
+                    }));
+                } else {
+                    if (!fullResponseText) {
+                        const errorMessage = `[The AI model returned an empty response. This might be due to a tool's output. Check the console for details and try again.]`;
+                        UI.appendMessage(chatMessages, errorMessage, 'ai');
+                        console.error('AI returned an empty response, possibly due to problematic tool output.');
+                    }
+                    running = false;
+                }
+            } catch (error) {
+                console.error('An error occurred during the AI turn:', error);
+                ApiKeyManager.rotateKey();
+
+                if (ApiKeyManager.hasTriedAllKeys()) {
+                    UI.appendMessage(chatMessages, 'All API keys failed. Please check your keys in the settings.', 'ai');
+                    console.error('All available API keys have failed.');
+                    running = false;
+                } else {
+                    const delay = this.rateLimit;
+                    UI.appendMessage(chatMessages, `API key failed. Waiting for ${Math.ceil(delay / 1000)}s before retrying...`, 'ai');
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    const history = this.chatSession ? await this.chatSession.getHistory() : [];
+                    await this._restartSessionWithHistory(history);
+                    this.lastRequestTime = Date.now();
+                }
             }
+        }
+    },
+
+    async sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, uploadedImage, clearImagePreview) {
+        const userPrompt = chatInput.value.trim();
+        if ((!userPrompt && !uploadedImage) || this.isSending) return;
+
+        // Restart session to apply latest custom rules
+        const historyToPreserve = this.chatSession ? await this.chatSession.getHistory() : [];
+        await this._restartSessionWithHistory(historyToPreserve);
+
+        if (!this.chatSession) {
+            UI.appendMessage(chatMessages, 'Could not start chat session.', 'ai');
+            return;
+        }
+
+        this.isSending = true;
+        this.isCancelled = false;
+        this._updateUiState(true);
+
+        try {
+            await this._handleRateLimiting(chatMessages);
+
+            const initialParts = this._prepareAndRenderUserMessage(chatInput, chatMessages, uploadedImage, clearImagePreview);
+
+            await this._performApiCall(initialParts, chatMessages);
 
             if (this.isCancelled) {
                 UI.appendMessage(chatMessages, 'Cancelled by user.', 'ai');
@@ -373,9 +386,7 @@ export const GeminiChat = {
             console.error('Chat Error:', error);
         } finally {
             this.isSending = false;
-            chatSendButton.style.display = 'inline-block';
-            chatCancelButton.style.display = 'none';
-            thinkingIndicator.style.display = 'none';
+            this._updateUiState(false);
         }
     },
 
