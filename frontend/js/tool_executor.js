@@ -43,6 +43,40 @@ async function _readFile({ filename }, rootHandle) {
     return { content: markdownContent };
 }
 
+async function _readMultipleFiles({ filenames }, rootHandle) {
+    if (!filenames || !Array.isArray(filenames) || filenames.length === 0) {
+        throw new Error("The 'filenames' parameter is required and must be a non-empty array of strings.");
+    }
+
+    let combinedContent = '';
+    const MAX_LENGTH = 30000;
+
+    for (const filename of filenames) {
+        try {
+            const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+            const file = await fileHandle.getFile();
+            let content = await file.text();
+            
+            combinedContent += `--- START OF FILE: ${filename} ---\n`;
+            if (content.length > MAX_LENGTH) {
+                content = `${content.substring(0, MAX_LENGTH)}\n\n... (file content truncated)`;
+            }
+            combinedContent += content + '\n';
+            combinedContent += `--- END OF FILE: ${filename} ---\n\n`;
+
+            // Open the file in the editor for user convenience, but don't focus it
+            await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
+        } catch (error) {
+            combinedContent += `--- ERROR READING FILE: ${filename} ---\n`;
+            combinedContent += `${error.message}\n`;
+            combinedContent += `--- END OF ERROR ---\n\n`;
+        }
+    }
+    
+    document.getElementById('chat-input').focus();
+    return { combined_content: combinedContent };
+}
+
 async function _createFile({ filename, content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for create_file.");
    const cleanContent = stripMarkdownCodeBlock(content);
@@ -303,6 +337,7 @@ const toolRegistry = {
     // Project-based tools
     get_project_structure: { handler: _getProjectStructure, requiresProject: true, createsCheckpoint: false },
     read_file: { handler: _readFile, requiresProject: true, createsCheckpoint: false },
+    read_multiple_files: { handler: _readMultipleFiles, requiresProject: true, createsCheckpoint: false },
     search_code: { handler: _searchCode, requiresProject: true, createsCheckpoint: false },
     build_or_update_codebase_index: { handler: _buildCodebaseIndex, requiresProject: true, createsCheckpoint: false },
     query_codebase: { handler: _queryCodebase, requiresProject: true, createsCheckpoint: false },
