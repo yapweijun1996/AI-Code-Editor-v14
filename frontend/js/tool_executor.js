@@ -26,6 +26,7 @@ async function _getProjectStructure(params, rootHandle) {
 }
 
 async function _readFile({ filename }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required for read_file.");
     const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
     const file = await fileHandle.getFile();
     let content = await file.text();
@@ -43,6 +44,7 @@ async function _readFile({ filename }, rootHandle) {
 }
 
 async function _createFile({ filename, content }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required for create_file.");
    const cleanContent = stripMarkdownCodeBlock(content);
    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
    const writable = await fileHandle.createWritable();
@@ -58,6 +60,7 @@ async function _createFile({ filename, content }, rootHandle) {
 }
 
 async function _rewriteFile({ filename, content }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required for rewrite_file.");
    const cleanContent = stripMarkdownCodeBlock(content);
    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
    const writable = await fileHandle.createWritable();
@@ -72,6 +75,7 @@ async function _rewriteFile({ filename, content }, rootHandle) {
 }
 
 async function _deleteFile({ filename }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required for delete_file.");
     const { parentHandle, entryName } = await FileSystem.getParentDirectoryHandle(rootHandle, filename);
     await parentHandle.removeEntry(entryName);
     if (Editor.getOpenFiles().has(filename)) {
@@ -85,6 +89,7 @@ async function _deleteFile({ filename }, rootHandle) {
 }
 
 async function _renameFile({ old_path, new_path }, rootHandle) {
+    if (!old_path || !new_path) throw new Error("The 'old_path' and 'new_path' parameters are required for rename_file.");
     await FileSystem.renameEntry(rootHandle, old_path, new_path);
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
@@ -100,6 +105,8 @@ async function _renameFile({ old_path, new_path }, rootHandle) {
 }
 
 async function _insertContent({ filename, line_number, content }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required for insert_content.");
+    if (typeof line_number !== 'number') throw new Error("The 'line_number' parameter is required and must be a number for insert_content.");
    const cleanContent = stripMarkdownCodeBlock(content);
    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
    const file = await fileHandle.getFile();
@@ -120,6 +127,7 @@ async function _insertContent({ filename, line_number, content }, rootHandle) {
 }
 
 async function _createFolder({ folder_path }, rootHandle) {
+    if (!folder_path) throw new Error("The 'folder_path' parameter is required for create_folder.");
     await FileSystem.createDirectoryFromPath(rootHandle, folder_path);
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
@@ -129,6 +137,7 @@ async function _createFolder({ folder_path }, rootHandle) {
 }
 
 async function _deleteFolder({ folder_path }, rootHandle) {
+    if (!folder_path) throw new Error("The 'folder_path' parameter is required for delete_folder.");
     const { parentHandle, entryName } = await FileSystem.getParentDirectoryHandle(rootHandle, folder_path);
     await parentHandle.removeEntry(entryName, { recursive: true });
     await UI.refreshFileTree(rootHandle, (filePath) => {
@@ -139,6 +148,7 @@ async function _deleteFolder({ folder_path }, rootHandle) {
 }
 
 async function _renameFolder({ old_folder_path, new_folder_path }, rootHandle) {
+    if (!old_folder_path || !new_folder_path) throw new Error("The 'old_folder_path' and 'new_folder_path' parameters are required for rename_folder.");
     await FileSystem.renameEntry(rootHandle, old_folder_path, new_folder_path);
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
