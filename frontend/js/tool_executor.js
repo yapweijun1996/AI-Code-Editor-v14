@@ -3,6 +3,19 @@ import { CodebaseIndexer } from './code_intel.js';
 import * as FileSystem from './file_system.js';
 import * as Editor from './editor.js';
 import * as UI from './ui.js';
+import { GeminiChat } from './gemini_chat.js';
+
+// --- Helper Functions ---
+
+function stripMarkdownCodeBlock(content) {
+   if (typeof content !== 'string') {
+       return content;
+   }
+   // Use a regular expression to match the code block format (e.g., ```javascript ... ```)
+   const match = content.match(/^```(?:\w+)?\n([\s\S]+)\n```$/);
+   // If it matches, return the captured group (the actual code). Otherwise, return the original content.
+   return match ? match[1] : content;
+}
 
 // --- Tool Handlers ---
 
@@ -30,10 +43,11 @@ async function _readFile({ filename }, rootHandle) {
 }
 
 async function _createFile({ filename, content }, rootHandle) {
-    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(content);
-    await writable.close();
+   const cleanContent = stripMarkdownCodeBlock(content);
+   const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
+   const writable = await fileHandle.createWritable();
+   await writable.write(cleanContent);
+   await writable.close();
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
         Editor.openFile(fileHandle, filePath, document.getElementById('tab-bar'));
@@ -44,13 +58,14 @@ async function _createFile({ filename, content }, rootHandle) {
 }
 
 async function _rewriteFile({ filename, content }, rootHandle) {
-    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
-    const writable = await fileHandle.createWritable();
-    await writable.write(content);
-    await writable.close();
-    if (Editor.getOpenFiles().has(filename)) {
-        Editor.getOpenFiles().get(filename)?.model.setValue(content);
-    }
+   const cleanContent = stripMarkdownCodeBlock(content);
+   const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+   const writable = await fileHandle.createWritable();
+   await writable.write(cleanContent);
+   await writable.close();
+   if (Editor.getOpenFiles().has(filename)) {
+       Editor.getOpenFiles().get(filename)?.model.setValue(cleanContent);
+   }
     await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
     document.getElementById('chat-input').focus();
     return { message: `File '${filename}' rewritten successfully.` };
@@ -85,13 +100,14 @@ async function _renameFile({ old_path, new_path }, rootHandle) {
 }
 
 async function _insertContent({ filename, line_number, content }, rootHandle) {
-    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
-    const file = await fileHandle.getFile();
-    const originalContent = await file.text();
-    const lines = originalContent.split('\n');
-    const insertionPoint = Math.max(0, line_number - 1);
-    lines.splice(insertionPoint, 0, content);
-    const newContent = lines.join('\n');
+   const cleanContent = stripMarkdownCodeBlock(content);
+   const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+   const file = await fileHandle.getFile();
+   const originalContent = await file.text();
+   const lines = originalContent.split('\n');
+   const insertionPoint = Math.max(0, line_number - 1);
+   lines.splice(insertionPoint, 0, cleanContent);
+   const newContent = lines.join('\n');
     const writable = await fileHandle.createWritable();
     await writable.write(newContent);
     await writable.close();
@@ -262,11 +278,12 @@ async function _getSelectedText() {
 }
 
 async function _replaceSelectedText({ new_text }) {
-    const editor = Editor.getEditorInstance();
-    const selection = editor.getSelection();
-    if (!selection || selection.isEmpty()) throw new Error('No text is selected to replace.');
-    editor.executeEdits('ai-agent', [{ range: selection, text: new_text }]);
-    return { message: 'Replaced the selected text.' };
+   const cleanText = stripMarkdownCodeBlock(new_text);
+   const editor = Editor.getEditorInstance();
+   const selection = editor.getSelection();
+   if (!selection || selection.isEmpty()) throw new Error('No text is selected to replace.');
+   editor.executeEdits('ai-agent', [{ range: selection, text: cleanText }]);
+   return { message: 'Replaced the selected text.' };
 }
 
 
@@ -365,13 +382,33 @@ export async function execute(toolCall, rootDirectoryHandle) {
     if (isSuccess && TOOLS_REQUIRING_SYNTAX_CHECK.includes(toolName)) {
         const filePath = parameters.filename || Editor.getActiveFilePath();
         if (filePath) {
-            await new Promise(resolve => setTimeout(resolve, 200)); // Give editor time to update
+            await new Promise(resolve => setTimeout(resolve, 200));
             const markers = Editor.getModelMarkers(filePath);
             const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
 
             if (errors.length > 0) {
-                const errorMessages = errors.map(e => `L${e.startLineNumber}: ${e.message}`).join('\n');
-                resultForModel.message = (resultForModel.message || '') + `\n\n**Warning**: The file was modified, but syntax errors were detected:\n${errorMessages}`;
+               const errorSignature = errors.map(e => `L${e.startLineNumber}:${e.message}`).join('|');
+               GeminiChat.trackError(filePath, errorSignature);
+               const attemptCount = GeminiChat.getConsecutiveErrorCount(filePath, errorSignature);
+               const MAX_ATTEMPTS = 3;
+
+               if (attemptCount >= MAX_ATTEMPTS) {
+                   const circuitBreakerMsg = `The AI has failed to fix the same error in '${filePath}' ${MAX_ATTEMPTS} times. The automatic feedback loop has been stopped to prevent an infinite loop. Please review the errors manually or try a different approach.`;
+                   resultForModel = { error: circuitBreakerMsg, feedback: 'STOP' };
+                   UI.showError(circuitBreakerMsg, 10000);
+                   console.error(circuitBreakerMsg);
+                   GeminiChat.resetErrorTracker();
+               } else {
+                   isSuccess = false;
+                   const errorMessages = errors.map(e => `L${e.startLineNumber}: ${e.message}`).join('\n');
+                   const attemptMessage = `This is attempt #${attemptCount} to fix this issue. The previous attempt failed. Please analyze the problem differently.`;
+                   const errorMessage = `The tool '${toolName}' ran, but the code now has syntax errors. ${attemptCount > 1 ? attemptMessage : ''}\n\nFile: ${filePath}\nErrors:\n${errorMessages}`;
+                   resultForModel = { error: errorMessage };
+                   UI.showError(`Syntax errors detected in ${filePath}. Attempting to fix... (${attemptCount}/${MAX_ATTEMPTS})`);
+                   console.error(errorMessage);
+               }
+            } else {
+               GeminiChat.resetErrorTracker();
             }
         }
     }

@@ -16,6 +16,11 @@ export const GeminiChat = {
     lastRequestTime: 0,
     rateLimit: 5000,
     rootDirectoryHandle: null,
+   errorTracker: {
+       filePath: null,
+       errorSignature: null,
+       count: 0,
+   },
 
     async initialize(rootDirectoryHandle) {
         this.rootDirectoryHandle = rootDirectoryHandle;
@@ -361,6 +366,9 @@ export const GeminiChat = {
         const userPrompt = chatInput.value.trim();
         if ((!userPrompt && !uploadedImage) || this.isSending) return;
 
+       // If this is a new, user-initiated prompt, reset the error tracker.
+       this.resetErrorTracker();
+
         // Restart session to apply latest custom rules
         const historyToPreserve = this.chatSession ? await this.chatSession.getHistory() : [];
         await this._restartSessionWithHistory(historyToPreserve);
@@ -438,4 +446,29 @@ export const GeminiChat = {
         const history = await this.chatSession.getHistory();
         return JSON.stringify(history, null, 2);
     },
+
+   trackError(filePath, errorSignature) {
+       if (this.errorTracker.filePath === filePath && this.errorTracker.errorSignature === errorSignature) {
+           this.errorTracker.count++;
+       } else {
+           this.errorTracker.filePath = filePath;
+           this.errorTracker.errorSignature = errorSignature;
+           this.errorTracker.count = 1;
+       }
+       console.log(`Error tracked:`, this.errorTracker);
+   },
+
+   getConsecutiveErrorCount(filePath, errorSignature) {
+       if (this.errorTracker.filePath === filePath && this.errorTracker.errorSignature === errorSignature) {
+           return this.errorTracker.count;
+       }
+       return 0;
+   },
+
+   resetErrorTracker() {
+       this.errorTracker.filePath = null;
+       this.errorTracker.errorSignature = null;
+       this.errorTracker.count = 0;
+       console.log('Error tracker reset.');
+   },
 };

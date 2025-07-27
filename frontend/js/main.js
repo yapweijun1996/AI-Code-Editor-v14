@@ -464,6 +464,7 @@ Analyze the code and provide the necessary changes to resolve these issues.
         `;
 
         chatInput.value = prompt.trim();
+       GeminiChat.resetErrorTracker(); // Reset tracker for manual fix attempts
         GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
     }
 
