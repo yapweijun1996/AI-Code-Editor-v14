@@ -131,6 +131,12 @@ export const DbManager = {
             resolve(request.result ? request.result.index : null);
         });
     },
+    async saveLastIndexTimestamp(timestamp) {
+        return this.saveSetting('lastIndexTimestamp', timestamp);
+    },
+    async getLastIndexTimestamp() {
+        return this.getSetting('lastIndexTimestamp');
+    },
     async saveSessionState(state) {
         const db = await this.openDb();
         return new Promise((resolve, reject) => {

@@ -198,10 +198,19 @@ async function _searchCode({ search_term }, rootHandle) {
 }
 
 async function _buildCodebaseIndex(params, rootHandle) {
-    UI.appendMessage(document.getElementById('chat-messages'), 'Building codebase index...', 'ai');
-    const index = await CodebaseIndexer.buildIndex(rootHandle);
-    await DbManager.saveCodeIndex(index);
-    return { message: 'Codebase index built successfully.' };
+    const startTime = Date.now();
+    UI.appendMessage(document.getElementById('chat-messages'), 'Checking for updates and building codebase index...', 'ai');
+
+    const lastIndexTimestamp = await DbManager.getLastIndexTimestamp() || 0;
+    const existingIndex = await DbManager.getCodeIndex();
+    
+    const { index: newIndex, stats } = await CodebaseIndexer.buildIndex(rootHandle, { lastIndexTimestamp, existingIndex });
+    
+    await DbManager.saveCodeIndex(newIndex);
+    await DbManager.saveLastIndexTimestamp(startTime);
+
+    const message = `Codebase index updated. ${stats.indexedFileCount} files indexed, ${stats.skippedFileCount} files skipped (unchanged), ${stats.deletedFileCount} files removed.`;
+    return { message };
 }
 
 async function _queryCodebase({ query }) {

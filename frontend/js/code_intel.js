@@ -2,13 +2,25 @@
 // === Codebase Intelligence and Indexing                        ===
 // =================================================================
 export const CodebaseIndexer = {
-    async buildIndex(dirHandle) {
-        const index = { files: {} };
-        await this.traverseAndIndex(dirHandle, '', index);
-        return index;
+    async buildIndex(dirHandle, options = {}) {
+        const { lastIndexTimestamp = 0, existingIndex = { files: {} } } = options;
+        const stats = { indexedFileCount: 0, skippedFileCount: 0, deletedFileCount: 0 };
+        const allFilePathsInProject = new Set();
+
+        await this.traverseAndIndex(dirHandle, '', existingIndex, lastIndexTimestamp, stats, allFilePathsInProject);
+        
+        // Clean up files that were deleted from the project
+        for (const filePath in existingIndex.files) {
+            if (!allFilePathsInProject.has(filePath)) {
+                delete existingIndex.files[filePath];
+                stats.deletedFileCount++;
+            }
+        }
+
+        return { index: existingIndex, stats };
     },
 
-    async traverseAndIndex(dirHandle, currentPath, index) {
+    async traverseAndIndex(dirHandle, currentPath, index, lastIndexTimestamp, stats, allFilePathsInProject) {
         const ignoreDirs = ['.git', 'node_modules', 'dist', 'build'];
         if (ignoreDirs.includes(dirHandle.name)) return;
 
@@ -16,19 +28,27 @@ export const CodebaseIndexer = {
             const newPath = currentPath
             ? `${currentPath}/${entry.name}`
             : entry.name;
-            if (
-            entry.kind === 'file' &&
-            entry.name.match(/\.(js|html|css|md|json|py|java|ts)$/)
-            ) {
-                try {
-                    const file = await entry.getFile();
-                    const content = await file.text();
-                    index.files[newPath] = this.parseFileContent(content);
-                } catch (e) {
-                    console.warn(`Could not index file: ${newPath}`, e);
+            
+            if (entry.kind === 'file') {
+                allFilePathsInProject.add(newPath); // Add file path to the set
+
+                if (entry.name.match(/\.(js|html|css|md|json|py|java|ts)$/)) {
+                    try {
+                        const file = await entry.getFile();
+                        // If lastIndexTimestamp is provided and file is not modified, skip it.
+                        if (lastIndexTimestamp && file.lastModified <= lastIndexTimestamp) {
+                            stats.skippedFileCount++;
+                            continue;
+                        }
+                        const content = await file.text();
+                        index.files[newPath] = this.parseFileContent(content);
+                        stats.indexedFileCount++;
+                    } catch (e) {
+                        console.warn(`Could not index file: ${newPath}`, e);
+                    }
                 }
             } else if (entry.kind === 'directory') {
-                await this.traverseAndIndex(entry, newPath, index);
+                await this.traverseAndIndex(entry, newPath, index, lastIndexTimestamp, stats, allFilePathsInProject);
             }
         }
     },
