@@ -1,8 +1,10 @@
 import { getFileHandleFromPath } from './file_system.js';
+import { GeminiChat } from './gemini_chat.js';
 
 let editor;
 let openFiles = new Map(); // Key: filePath (string), Value: { handle, name, model, viewState }
 let activeFilePath = null;
+let codeLensProvider = null;
 
 function getLanguageFromExtension(ext) {
     return ({
@@ -94,6 +96,71 @@ export function initializeEditor(editorContainer, tabBarContainer) {
             
             // Initial render
             renderTabs(tabBarContainer, onTabClick, onTabClose);
+
+            if (codeLensProvider) {
+                codeLensProvider.dispose();
+            }
+            
+            codeLensProvider = monaco.languages.registerCodeLensProvider(['javascript', 'typescript', 'python', 'java', 'html', 'css'], {
+                provideCodeLenses: function(model, token) {
+                    const markers = monaco.editor.getModelMarkers({ resource: model.uri });
+                    const lenses = [];
+                    markers.forEach(marker => {
+                        if (marker.severity === monaco.MarkerSeverity.Error) {
+                            lenses.push({
+                                range: {
+                                    startLineNumber: marker.startLineNumber,
+                                    startColumn: marker.startColumn,
+                                    endLineNumber: marker.endLineNumber,
+                                    endColumn: marker.endColumn
+                                },
+                                id: "fixErrorLens",
+                                command: {
+                                    id: "editor.action.fixErrorWithAI",
+                                    title: "✨ Fix with AI",
+                                    arguments: [marker]
+                                }
+                            });
+                        }
+                    });
+                    return {
+                        lenses: lenses,
+                        dispose: () => {}
+                    };
+                },
+                resolveCodeLens: function(model, codeLens, token) {
+                    return codeLens;
+                }
+            });
+
+            editor.addAction({
+                id: "editor.action.fixErrorWithAI",
+                label: "Fix Error with AI",
+                contextMenuGroupId: "navigation",
+                contextMenuOrder: 1.5,
+                run: function(ed, marker) {
+                    const model = ed.getModel();
+                    const lineContent = model.getLineContent(marker.startLineNumber);
+                    
+                    // Automatically select the full line of the error
+                    const selection = new monaco.Selection(marker.startLineNumber, 1, marker.startLineNumber, model.getLineMaxColumn(marker.startLineNumber));
+                    ed.setSelection(selection);
+
+                    const prompt = `The following line of code in the file "${getActiveFilePath()}" on line ${marker.startLineNumber} has an error:\n\n` +
+                                   `\`\`\`\n${lineContent}\n\`\`\`\n\n` +
+                                   `The error message is: "${marker.message}".\n\n` +
+                                   `Please provide the corrected code to replace this line. Use the 'replace_selected_text' tool.`;
+
+                    const chatInput = document.getElementById('chat-input');
+                    const chatMessages = document.getElementById('chat-messages');
+                    const chatSendButton = document.getElementById('chat-send-button');
+                    const chatCancelButton = document.getElementById('chat-cancel-button');
+                    const thinkingIndicator = document.getElementById('thinking-indicator');
+                    
+                    chatInput.value = prompt;
+                    GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
+                }
+            });
 
             resolve(editor);
         });
