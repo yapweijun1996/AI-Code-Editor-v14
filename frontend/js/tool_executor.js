@@ -166,10 +166,11 @@ async function executeTool(toolCall, rootDirectoryHandle) {
             return { message: 'Replaced the selected text.' };
         }
         case 'run_terminal_command': {
+            const updatedParameters = { ...parameters, cwd: rootDirectoryHandle.name };
             const response = await fetch('/api/execute-tool', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ toolName: 'run_terminal_command', parameters: parameters }),
+                body: JSON.stringify({ toolName: 'run_terminal_command', parameters: updatedParameters }),
             });
             const terminalResult = await response.json();
             if (terminalResult.status === 'Success') {
@@ -196,10 +197,11 @@ async function executeTool(toolCall, rootDirectoryHandle) {
         }
         case 'get_file_history': {
             const command = `git log --pretty=format:"%h - %an, %ar : %s" -- ${parameters.filename}`;
+            const updatedParameters = { command, cwd: rootDirectoryHandle.name };
             const response = await fetch('/api/execute-tool', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ toolName: 'run_terminal_command', parameters: { command } }),
+                body: JSON.stringify({ toolName: 'run_terminal_command', parameters: updatedParameters }),
             });
             const terminalResult = await response.json();
             if (terminalResult.status === 'Success') {

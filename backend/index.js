@@ -182,7 +182,7 @@ app.post('/api/execute-tool', async (req, res) => {
       });
   }
 
-  const { command } = parameters;
+  const { command, cwd } = parameters;
   if (!command) {
     return res
       .status(400)
@@ -195,7 +195,7 @@ app.post('/api/execute-tool', async (req, res) => {
     name: 'xterm-color',
     cols: 80,
     rows: 30,
-    cwd: process.env.HOME, // Start in the user's home directory
+    cwd: cwd || process.env.HOME, // Use provided cwd or fallback to home directory
     env: process.env,
   });
 
