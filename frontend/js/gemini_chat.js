@@ -49,7 +49,7 @@ export const GeminiChat = {
 
             const baseTools = {
                 functionDeclarations: [
-                    { name: 'create_file', description: "Creates a new file. CRITICAL: Do NOT include the root directory name in the path. Example: To create 'app.js' in the root, the path is 'app.js', NOT 'my-project/app.js'.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, content: { type: 'STRING' } }, required: ['filename', 'content'] } },
+                    { name: 'create_file', description: "Creates a new file. CRITICAL: Do NOT include the root directory name in the path. Example: To create 'app.js' in the root, the path is 'app.js', NOT 'my-project/app.js'.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, content: { type: 'STRING', description: 'The raw text content of the file. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'content'] } },
                     { name: 'delete_file', description: "Deletes a file. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
                     { name: 'create_folder', description: "Creates a new folder. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { folder_path: { type: 'STRING' } }, required: ['folder_path'] } },
                     { name: 'delete_folder', description: "Deletes a folder and all its contents. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { folder_path: { type: 'STRING' } }, required: ['folder_path'] } },
@@ -59,7 +59,7 @@ export const GeminiChat = {
                     { name: 'read_url', description: 'Reads and extracts the main content and all links from a given URL. The result will be a JSON object with "content" and "links" properties.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING' } }, required: ['url'] } },
                     { name: 'get_open_file_content', description: 'Gets the content of the currently open file in the editor.' },
                     { name: 'get_selected_text', description: 'Gets the text currently selected by the user in the editor.' },
-                    { name: 'replace_selected_text', description: 'Replaces the currently selected text in the editor with new text.', parameters: { type: 'OBJECT', properties: { new_text: { type: 'STRING' } }, required: ['new_text'] } },
+                    { name: 'replace_selected_text', description: 'Replaces the currently selected text in the editor with new text.', parameters: { type: 'OBJECT', properties: { new_text: { type: 'STRING', description: 'The raw text to replace the selection with. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['new_text'] } },
                     { name: 'get_project_structure', description: 'Gets the entire file and folder structure of the project. CRITICAL: Always use this tool before attempting to read or create a file to ensure you have the correct file path.' },
                     { name: 'duckduckgo_search', description: 'Performs a search using DuckDuckGo and returns the results.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
                     { name: 'search_code', description: 'Searches for a specific string in all files in the project (like grep).', parameters: { type: 'OBJECT', properties: { search_term: { type: 'STRING' } }, required: ['search_term'] } },
@@ -67,7 +67,7 @@ export const GeminiChat = {
                     { name: 'build_or_update_codebase_index', description: 'Scans the entire codebase to build a searchable index. Slow, run once per session.' },
                     { name: 'query_codebase', description: 'Searches the pre-built codebase index.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
                     { name: 'get_file_history', description: "Gets a file's git history. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
-                    { name: 'rewrite_file', description: "Rewrites a file with new content. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, content: { type: 'STRING' } }, required: ['filename', 'content'] } },
+                    { name: 'rewrite_file', description: "Rewrites a file with new content. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, content: { type: 'STRING', description: 'The new, raw text content of the file. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'content'] } },
                     { name: 'format_code', description: "Formats a file with Prettier. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
                     { name: 'analyze_code', description: "Analyzes a JavaScript file's structure. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
                 ],
@@ -183,7 +183,7 @@ export const GeminiChat = {
             console.log(`New chat session started with model: ${modelName}, mode: ${mode}, and ${history.length} history parts.`);
         } catch (error) {
             console.error('Failed to start chat session:', error);
-            UI.appendMessage(document.getElementById('chat-messages'), `Error: Could not start chat session. ${error.message}`, 'ai');
+            UI.showError(`Error: Could not start chat session. ${error.message}`);
         }
     },
 
@@ -329,8 +329,9 @@ export const GeminiChat = {
                 } else {
                     if (!fullResponseText) {
                         const errorMessage = `[The AI model returned an empty response. This might be due to a tool's output. Check the console for details and try again.]`;
-                        UI.appendMessage(chatMessages, errorMessage, 'ai');
-                        console.error('AI returned an empty response, possibly due to problematic tool output.');
+                        const errorMsg = 'The AI model returned an empty response. This might be due to a tool\'s output. Check the console for details and try again.';
+                        UI.showError(errorMsg);
+                        console.error(errorMsg);
                     }
                     running = false;
                 }
@@ -339,12 +340,14 @@ export const GeminiChat = {
                 ApiKeyManager.rotateKey();
 
                 if (ApiKeyManager.hasTriedAllKeys()) {
-                    UI.appendMessage(chatMessages, 'All API keys failed. Please check your keys in the settings.', 'ai');
-                    console.error('All available API keys have failed.');
+                    const errorMsg = 'All API keys failed. Please check your keys in the settings.';
+                    UI.showError(errorMsg);
+                    console.error(errorMsg);
                     running = false;
                 } else {
                     const delay = this.rateLimit;
-                    UI.appendMessage(chatMessages, `API key failed. Waiting for ${Math.ceil(delay / 1000)}s before retrying...`, 'ai');
+                    const errorMsg = `API key failed. Waiting for ${Math.ceil(delay / 1000)}s before retrying...`;
+                    UI.showError(errorMsg, delay);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     const history = this.chatSession ? await this.chatSession.getHistory() : [];
                     await this._restartSessionWithHistory(history);
@@ -363,7 +366,7 @@ export const GeminiChat = {
         await this._restartSessionWithHistory(historyToPreserve);
 
         if (!this.chatSession) {
-            UI.appendMessage(chatMessages, 'Could not start chat session.', 'ai');
+            UI.showError('Could not start chat session.');
             return;
         }
 
@@ -382,7 +385,7 @@ export const GeminiChat = {
                 UI.appendMessage(chatMessages, 'Cancelled by user.', 'ai');
             }
         } catch (error) {
-            UI.appendMessage(chatMessages, `An error occurred: ${error.message}`, 'ai');
+            UI.showError(`An error occurred: ${error.message}`);
             console.error('Chat Error:', error);
         } finally {
             this.isSending = false;

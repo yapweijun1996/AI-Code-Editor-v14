@@ -252,3 +252,31 @@ export function displayRules(chatMessagesContainer, rules, modeName) {
     chatMessagesContainer.appendChild(rulesDiv);
     chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
 }
+
+export function showError(message, duration = 5000) {
+    const container = document.getElementById('error-container');
+    if (!container) {
+        console.error('Error container not found!');
+        return;
+    }
+
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = message;
+
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '&times;';
+    closeButton.onclick = () => {
+        errorDiv.classList.add('hide');
+        setTimeout(() => errorDiv.remove(), 500);
+    };
+
+    errorDiv.appendChild(closeButton);
+    container.appendChild(errorDiv);
+
+    setTimeout(() => {
+        if (errorDiv.parentElement) {
+            closeButton.onclick();
+        }
+    }, duration);
+}
