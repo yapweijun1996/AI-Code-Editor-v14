@@ -29,14 +29,24 @@ async function _readFile({ filename }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for read_file.");
     const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
     const file = await fileHandle.getFile();
-    let content = await file.text();
-    const MAX_LENGTH = 30000;
-    if (content.length > MAX_LENGTH) {
-        content = `${content.substring(0, MAX_LENGTH)}\n\n... (file content truncated because it was too long)`;
-    }
+
+    const MAX_CONTEXT_BYTES = 100000; // 100KB threshold
+
     await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
     document.getElementById('chat-input').focus();
-    
+
+    if (file.size > MAX_CONTEXT_BYTES) {
+        return {
+            status: "Success",
+            message: "File is too large to be returned in full.",
+            filename: filename,
+            file_size: file.size,
+            truncated: true,
+            guidance: "The file content was not returned to prevent exceeding the context window. The file has been opened in the editor. Use surgical tools like 'create_and_apply_diff' to modify it based on the visible content."
+        };
+    }
+
+    const content = await file.text();
     return { content: content };
 }
 
@@ -45,23 +55,26 @@ async function _readMultipleFiles({ filenames }, rootHandle) {
         throw new Error("The 'filenames' parameter is required and must be a non-empty array of strings.");
     }
 
+    const MAX_CONTEXT_BYTES = 100000; // 100KB threshold per file
     let combinedContent = '';
-    const MAX_LENGTH = 30000;
 
     for (const filename of filenames) {
         try {
             const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
             const file = await fileHandle.getFile();
-            let content = await file.text();
             
             combinedContent += `--- START OF FILE: ${filename} ---\n`;
-            if (content.length > MAX_LENGTH) {
-                content = `${content.substring(0, MAX_LENGTH)}\n\n... (file content truncated)`;
+
+            if (file.size > MAX_CONTEXT_BYTES) {
+                combinedContent += `File is too large to be included in the context (Size: ${file.size} bytes).\n`;
+                combinedContent += `Guidance: The file has been opened in the editor. Use surgical tools to modify it.\n`;
+            } else {
+                let content = await file.text();
+                combinedContent += content + '\n';
             }
-            combinedContent += content + '\n';
+            
             combinedContent += `--- END OF FILE: ${filename} ---\n\n`;
 
-            // Open the file in the editor for user convenience, but don't focus it
             await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
         } catch (error) {
             combinedContent += `--- ERROR READING FILE: ${filename} ---\n`;
