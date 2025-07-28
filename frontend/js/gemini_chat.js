@@ -359,12 +359,16 @@ export const GeminiChat = {
                 if (functionCalls.length > 0) {
                     const toolPromises = functionCalls.map((call) => ToolExecutor.execute(call, this.rootDirectoryHandle));
                     const toolResults = await Promise.all(toolPromises);
-                    promptParts = toolResults.map((toolResult) => ({
-                        functionResponse: {
-                            name: toolResult.toolResponse.name,
-                            response: toolResult.toolResponse.response,
-                        },
-                    }));
+                    promptParts = toolResults.map((toolResult) => {
+                        const response = toolResult.toolResponse.response;
+                        const responseToSend = typeof response === 'object' ? JSON.stringify(response) : response;
+                        return {
+                            functionResponse: {
+                                name: toolResult.toolResponse.name,
+                                response: responseToSend,
+                            },
+                        };
+                    });
                 } else {
                     if (!fullResponseText) {
                         const errorMessage = `[The AI model returned an empty response. This might be due to a tool's output. Check the console for details and try again.]`;
