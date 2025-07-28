@@ -724,3 +724,23 @@ button:hover {
   font-size: 0.95em;
   margin-top: 10px;
 }
+
+.sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-tab {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-right: 1px solid var(--border-color);
+}
+
+.sidebar-tab:last-child {
+    border-right: none;
+}
+
+.sidebar-tab.active {
+    background-color: var(--background-color-secondary);
+    border-bottom: 1px solid transparent;
+}

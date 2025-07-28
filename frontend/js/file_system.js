@@ -97,7 +97,9 @@ export async function searchInDirectory(
     searchTerm,
     currentPath,
     results,
-    ignorePatterns
+    ignorePatterns,
+    useRegex = false,
+    caseSensitive = false
 ) {
     for await (const entry of dirHandle.values()) {
         const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
@@ -112,11 +114,23 @@ export async function searchInDirectory(
                 const lines = content.split('\n');
                 const fileMatches = [];
                 for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].toLowerCase().includes(searchTerm.toLowerCase())) {
-                        fileMatches.push({
-                            line_number: i + 1,
-                            line_content: lines[i].trim(),
-                        });
+                    if (useRegex) {
+                        const regex = new RegExp(searchTerm, caseSensitive ? '' : 'i');
+                        if (regex.test(lines[i])) {
+                            fileMatches.push({
+                                line_number: i + 1,
+                                line_content: lines[i].trim(),
+                            });
+                        }
+                    } else {
+                        const line = caseSensitive ? lines[i] : lines[i].toLowerCase();
+                        const term = caseSensitive ? searchTerm : searchTerm.toLowerCase();
+                        if (line.includes(term)) {
+                            fileMatches.push({
+                                line_number: i + 1,
+                                line_content: lines[i].trim(),
+                            });
+                        }
                     }
                 }
                 if (fileMatches.length > 0) {
@@ -234,4 +248,89 @@ export async function verifyAndRequestPermission(fileHandle, withWrite = false) 
     }
     // The user didn't grant permission, so we can't proceed.
     return false;
+}
+/**
+ * Creates a file system adapter for isomorphic-git to use the File System Access API.
+ * @param {FileSystemDirectoryHandle} rootDirectoryHandle - The root directory handle.
+ * @returns {object} An fs-like object for isomorphic-git.
+ */
+export function createFsAdapter(rootDirectoryHandle) {
+    const getHandle = async (filepath, create = false) => {
+        const parts = filepath.split('/').filter(p => p);
+        let handle = rootDirectoryHandle;
+        for (let i = 0; i < parts.length - 1; i++) {
+            handle = await handle.getDirectoryHandle(parts[i], { create });
+        }
+        return { dir: handle, name: parts[parts.length - 1] };
+    };
+
+    return {
+        promises: {
+            async readFile(filepath, options) {
+                try {
+                    const { dir, name } = await getHandle(filepath);
+                    const fileHandle = await dir.getFileHandle(name);
+                    const file = await fileHandle.getFile();
+                    const content = await file.text();
+                    return options && options.encoding === 'utf8' ? content : new TextEncoder().encode(content);
+                } catch (e) {
+                    throw new Error(`ENOENT: no such file or directory, open '${filepath}'`);
+                }
+            },
+            async writeFile(filepath, data) {
+                const { dir, name } = await getHandle(filepath, true);
+                const fileHandle = await dir.getFileHandle(name, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(data);
+                await writable.close();
+            },
+            async unlink(filepath) {
+                const { dir, name } = await getHandle(filepath);
+                await dir.removeEntry(name);
+            },
+            async mkdir(filepath) {
+                const parts = filepath.split('/').filter(p => p);
+                let handle = rootDirectoryHandle;
+                for (const part of parts) {
+                    handle = await handle.getDirectoryHandle(part, { create: true });
+                }
+            },
+            async rmdir(filepath) {
+                const { dir, name } = await getHandle(filepath);
+                await dir.removeEntry(name, { recursive: true });
+            },
+            async stat(filepath) {
+                try {
+                    const { dir, name } = await getHandle(filepath);
+                    const handle = await dir.getDirectoryHandle(name).catch(() => dir.getFileHandle(name));
+                    const file = handle.kind === 'file' ? await handle.getFile() : null;
+                    return {
+                        isFile: () => handle.kind === 'file',
+                        isDirectory: () => handle.kind === 'directory',
+                        size: file ? file.size : 0,
+                        mtimeMs: file ? file.lastModified : 0,
+                    };
+                } catch (e) {
+                     throw new Error(`ENOENT: no such file or directory, lstat '${filepath}'`);
+                }
+            },
+            async lstat(filepath) {
+                return this.stat(filepath); // Simplified for this use case
+            },
+            async readdir(filepath) {
+                let handle = rootDirectoryHandle;
+                if (filepath !== '.' && filepath !== '/') {
+                    const parts = filepath.split('/').filter(p => p);
+                    for (const part of parts) {
+                       handle = await handle.getDirectoryHandle(part);
+                    }
+                }
+                const entries = [];
+                for await (const name of handle.keys()) {
+                    entries.push(name);
+                }
+                return entries;
+            },
+        }
+    };
 }

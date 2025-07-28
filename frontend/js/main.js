@@ -5,6 +5,7 @@ import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import * as FileSystem from './file_system.js';
 import { initializeEventListeners } from './events.js';
+import GitManager from './git_manager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DOM Elements ---
@@ -31,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearImagePreview: null,
         handleFixErrors: null,
         handleImageUpload: null,
+        gitManager: null,
     };
 
     // --- Initialization ---
@@ -52,6 +54,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         if ((await savedHandle.queryPermission({ mode: 'readwrite' })) === 'granted') {
             appState.rootDirectoryHandle = savedHandle;
             GeminiChat.rootDirectoryHandle = savedHandle;
+            
+            // Initialize GitManager with the file system
+            appState.gitManager = GitManager;
+            appState.gitManager.fs = FileSystem.createFsAdapter(savedHandle);
+            try {
+                await appState.gitManager.init();
+                console.log('Git repository initialized.');
+            } catch (e) {
+                // Ignore if it's already a git repository
+            }
+            window.App.git = appState.gitManager; // For debugging
+
             await UI.refreshFileTree(savedHandle, appState.onFileSelect);
 
             const savedState = await DbManager.getSessionState();
@@ -78,6 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Restore session and initialize chat ---
     await GeminiChat.initialize();
+    window.App = appState;
     await tryRestoreDirectory();
 
     if (!GeminiChat.chatSession) {

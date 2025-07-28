@@ -16,19 +16,53 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css"
     />
+    <script src="js/lib/git.umd.js"></script>
   </head>
   <body>
     <div id="error-container"></div>
     <div class="container" id="split-container">
       <div id="file-tree-container" class="sidebar">
-        <h2 style="margin: 0px 0px 5px 0px;">Project Files</h2>
-        <div id="directory-controls">
-          <button id="open-directory-button">Open Folder</button>
-          <button id="reconnect-button" style="display: none;">Reconnect</button>
-          <button id="forget-folder-button" style="display: none;">Forget Folder</button>
+        <div class="sidebar-tabs">
+            <div class="sidebar-tab active" id="files-tab">Files</div>
+            <div class="sidebar-tab" id="git-tab">Git</div>
+            <div class="sidebar-tab" id="search-tab">Search</div>
+            <div class="sidebar-tab" id="tasks-tab">Tasks</div>
         </div>
-        <div id="file-tree"></div>
-      </div>
+        <div class="sidebar-content" id="files-content">
+            <h2 style="margin: 0px 0px 5px 0px;">Project Files</h2>
+            <div id="directory-controls">
+              <button id="open-directory-button">Open Folder</button>
+              <button id="reconnect-button" style="display: none;">Reconnect</button>
+              <button id="forget-folder-button" style="display: none;">Forget Folder</button>
+            </div>
+            <div id="file-tree"></div>
+        </div>
+        <div class="sidebar-content" id="git-content" style="display: none;">
+            <h3>Git Status</h3>
+            <div id="git-status-container"></div>
+            <h3>Commit</h3>
+            <textarea id="commit-message" placeholder="Commit message"></textarea>
+            <button id="commit-button">Commit</button>
+        </div>
+        <div class="sidebar-content" id="search-content" style="display: none;">
+            <h3>Search in Files</h3>
+            <input type="text" id="search-input" placeholder="Search">
+            <div class="search-options">
+                <label><input type="checkbox" id="search-regex"> Regex</label>
+                <label><input type="checkbox" id="search-case-sensitive"> Case Sensitive</label>
+            </div>
+            <button id="search-button">Search</button>
+            <div id="search-results-container"></div>
+        </div>
+        <div class="sidebar-content" id="tasks-content" style="display: none;">
+            <h3>Tasks</h3>
+            <div id="tasks-container"></div>
+            <div id="task-output-container">
+                <h4>Output</h4>
+                <pre id="task-output"></pre>
+            </div>
+        </div>
+    </div>
       <div id="editor-container" class="main-content">
         <div id="tab-bar"></div>
         <div id="editor"></div>

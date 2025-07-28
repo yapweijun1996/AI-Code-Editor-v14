@@ -10,7 +10,9 @@
     "delete": "pm2 delete ai-editor"
   },
   "dependencies": {
+    "browserify": "^17.0.1",
     "express": "^4.17.1",
+    "isomorphic-git": "^1.32.2",
     "jest": "^29.7.0"
   }
 }
