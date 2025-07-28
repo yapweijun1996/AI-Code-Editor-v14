@@ -3,7 +3,9 @@ const fs = require('fs');
 
 console.log('Build script started.');
 
-const b = browserify();
+const b = browserify({
+  standalone: 'git'
+});
 b.require('isomorphic-git');
 b.require('isomorphic-git/http/web', { expose: 'isomorphic-git/http' });
 

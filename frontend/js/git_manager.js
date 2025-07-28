@@ -39,6 +39,5 @@ class GitManager {
   }
 }
 
-// Export an instance of the GitManager
-// This will be initialized later with the file system.
-export default new GitManager(null);
+// Export the class for instantiation later
+export { GitManager };

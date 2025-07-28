@@ -5,7 +5,7 @@ import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import * as FileSystem from './file_system.js';
 import { initializeEventListeners } from './events.js';
-import GitManager from './git_manager.js';
+import { GitManager } from './git_manager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DOM Elements ---
@@ -45,9 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     async function initializeGit(directoryHandle) {
-        appState.gitManager = GitManager;
-        appState.gitManager.fs = FileSystem.createFsAdapter(directoryHandle);
-        appState.gitManager.git = window.git; // Ensure git is assigned before use
+        appState.gitManager = new GitManager(FileSystem.createFsAdapter(directoryHandle));
         try {
             await appState.gitManager.init();
             console.log('Git repository initialized.');
