@@ -5,6 +5,10 @@ const { exec } = require('child_process');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { URL } = require('url');
+const codebaseIndexer = require('./codebase_indexer');
+const fs = require('fs').promises;
+const prettier = require('prettier');
+const chokidar = require('chokidar');
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
@@ -168,6 +172,61 @@ app.post('/api/duckduckgo-search', async (req, res) => {
 });
 
 // =================================================================
+// === Codebase Indexing and Querying Endpoints                  ===
+// =================================================================
+
+app.post('/api/build-codebase-index', async (req, res) => {
+  console.log('[API] Received request to build codebase index.');
+  try {
+    // This can be a long-running process.
+    // For a real-world scenario, you'd use a job queue or worker thread.
+    const stats = await codebaseIndexer.buildIndex();
+    res.json({ status: 'Success', ...stats });
+  } catch (error) {
+    console.error(`[API] Error building codebase index:`, error);
+    res.status(500).json({ status: 'Error', message: 'Failed to build codebase index.' });
+  }
+});
+
+app.get('/api/query-codebase', async (req, res) => {
+  const { query, page = 1, limit = 20 } = req.query;
+  if (!query) {
+    return res.status(400).json({ error: 'Query parameter is required' });
+  }
+
+  try {
+    const index = await codebaseIndexer.getIndex();
+    const results = [];
+    
+    // Search logic: find files with matching symbols
+    for (const file in index) {
+      const symbols = index[file];
+      const matchingSymbols = symbols.filter(symbol => symbol.toLowerCase().includes(query.toLowerCase()));
+      if (matchingSymbols.length > 0) {
+        results.push({ file, symbols: matchingSymbols });
+      }
+    }
+
+    // Pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedResults = results.slice(startIndex, endIndex);
+
+    res.json({
+      status: 'Success',
+      results: paginatedResults,
+      total: results.length,
+      page: Number(page),
+      limit: Number(limit)
+    });
+  } catch (error) {
+    console.error(`[API] Error querying codebase index:`, error);
+    res.status(500).json({ status: 'Error', message: 'Failed to query codebase index.' });
+  }
+});
+
+
+// =================================================================
 // === Backend Terminal Tool Execution Endpoint                  ===
 // =================================================================
 app.post('/api/execute-tool', async (req, res) => {
@@ -261,7 +320,108 @@ app.post('/api/execute-tool', async (req, res) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`Backend server listening at http://localhost:${port}`);
-  console.log('Navigate to http://localhost:3000 to open the editor.');
+// =================================================================
+// === Code Formatting Endpoint                                  ===
+// =================================================================
+app.post('/api/format-code', async (req, res) => {
+  const { filename } = req.body;
+  if (!filename) {
+    return res.status(400).json({ status: 'Error', message: 'Filename is required.' });
+  }
+
+  // Sanitize the filename to prevent path traversal attacks.
+  // Ensures the path is relative and does not access parent directories.
+  const projectRoot = path.join(__dirname, '..');
+  const safeFilename = path.normalize(filename).replace(/^(\.\.[\/\\])+/, '');
+  const fullPath = path.join(projectRoot, safeFilename);
+
+  // Double-check that the resolved path is still within the project root.
+  if (!fullPath.startsWith(projectRoot)) {
+    return res.status(403).json({ status: 'Error', message: 'Access to files outside the project directory is forbidden.' });
+  }
+
+  try {
+    const fileInfo = await prettier.getFileInfo(fullPath);
+
+    if (fileInfo.ignored) {
+      return res.json({ status: 'Success', message: `File '${filename}' is ignored by Prettier.` });
+    }
+
+    if (!fileInfo.inferredParser) {
+      return res.status(400).json({ status: 'Error', message: `Could not infer Prettier parser for file '${filename}'.` });
+    }
+
+    const source = await fs.readFile(fullPath, 'utf8');
+    const formatted = await prettier.format(source, { parser: fileInfo.inferredParser });
+
+    await fs.writeFile(fullPath, formatted, 'utf8');
+
+    res.json({ status: 'Success', message: `File '${filename}' formatted successfully.` });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ status: 'Error', message: `File not found: ${filename}` });
+    }
+    console.error(`[API] Error formatting file '${filename}':`, error);
+    res.status(500).json({ status: 'Error', message: `Failed to format file: ${error.message}` });
+  }
 });
+
+
+// =================================================================
+// === File Watcher for Automatic Indexing                       ===
+// =================================================================
+
+function initializeFileWatcher() {
+  const projectRoot = path.join(__dirname, '..');
+  const watcher = chokidar.watch(projectRoot, {
+    ignored: [
+      /(^|[\/\\])\../, // ignore dotfiles
+      'node_modules',
+      'package-lock.json',
+      'codebase_index.json',
+      'dist',
+      'build'
+    ],
+    persistent: true,
+    ignoreInitial: true, // Don't fire 'add' events on initial scan
+  });
+
+  console.log(`[Watcher] File watcher initialized for project root: ${projectRoot}`);
+
+  watcher
+    .on('add', (filePath) => {
+        console.log(`[Watcher] File added: ${filePath}`);
+        codebaseIndexer.addOrUpdateFile(filePath);
+    })
+    .on('change', (filePath) => {
+        console.log(`[Watcher] File changed: ${filePath}`);
+        codebaseIndexer.addOrUpdateFile(filePath);
+    })
+    .on('unlink', (filePath) => {
+        console.log(`[Watcher] File removed: ${filePath}`);
+        codebaseIndexer.removeFile(filePath);
+    })
+    .on('error', (error) => console.error(`[Watcher] Error: ${error}`));
+}
+
+async function initializeApp() {
+  // Build the initial index if it doesn't exist.
+  try {
+    await fs.access(path.join(__dirname, 'codebase_index.json'));
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.log('[App] Index file not found, performing initial build...');
+      await codebaseIndexer.buildIndex();
+    }
+  }
+
+  // Start the file watcher to keep the index up-to-date.
+  initializeFileWatcher();
+
+  app.listen(port, () => {
+    console.log(`Backend server listening at http://localhost:${port}`);
+    console.log('Navigate to http://localhost:3000 to open the editor.');
+  });
+}
+
+initializeApp();

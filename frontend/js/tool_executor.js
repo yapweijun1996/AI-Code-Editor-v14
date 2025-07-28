@@ -173,7 +173,7 @@ async function _createFile({ filename, content }, rootHandle) {
 async function _rewriteFile({ filename, content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for rewrite_file.");
    const cleanContent = stripMarkdownCodeBlock(content);
-   const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+   const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
     if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
         throw new Error('Permission to write to the file was denied.');
     }
@@ -486,13 +486,26 @@ async function _reindexCodebasePaths({ paths }, rootHandle) {
 }
 
 async function _formatCode({ filename }, rootHandle) {
-    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
-    const file = await fileHandle.getFile();
-    const originalContent = await file.text();
-    const parser = Editor.getPrettierParser(filename);
-    const prettierWorker = new Worker('prettier.worker.js');
-    prettierWorker.postMessage({ code: originalContent, parser });
-    return { message: `Formatting request for '${filename}' sent.` };
+    const response = await fetch('/api/format-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename }),
+    });
+
+    const result = await response.json();
+
+    if (result.status === 'Success') {
+        // If the formatted file is open in the editor, refresh its content
+        if (Editor.getOpenFiles().has(filename)) {
+            const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+            const file = await fileHandle.getFile();
+            const newContent = await file.text();
+            Editor.getOpenFiles().get(filename)?.model.setValue(newContent);
+        }
+        return { message: result.message };
+    } else {
+        throw new Error(result.message || 'An unknown error occurred during formatting.');
+    }
 }
 
 async function _analyzeCode({ filename }, rootHandle) {
@@ -543,7 +556,7 @@ async function _getFileHistory({ filename }, rootHandle) {
     if (terminalResult.status === 'Success') {
         return { history: terminalResult.output };
     } else {
-        throw new Error(`Fetching file history failed. This is likely a backend issue with 'git'. Please check the server logs. Raw message: ${terminalResult.message}`);
+        throw new Error(terminalResult.message || `Fetching file history failed. This is likely a backend issue with 'git'.`);
     }
 }
 
@@ -589,7 +602,7 @@ async function _getSelectedText() {
     const editor = Editor.getEditorInstance();
     const selection = editor.getSelection();
     if (!selection || selection.isEmpty()) {
-        throw new Error('No text is currently selected.');
+        throw new Error('Error: No text is currently selected in the editor. Please select the text you want to get.');
     }
     const selectedText = editor.getModel().getValueInRange(selection);
     return {
@@ -618,9 +631,36 @@ async function _replaceSelectedText({ new_text }) {
    const cleanText = stripMarkdownCodeBlock(new_text);
    const editor = Editor.getEditorInstance();
    const selection = editor.getSelection();
-   if (!selection || selection.isEmpty()) throw new Error('No text is selected to replace.');
+   if (!selection || selection.isEmpty()) throw new Error('Error: No text is selected in the editor. Please select the text you want to replace.');
    editor.executeEdits('ai-agent', [{ range: selection, text: cleanText }]);
    return { message: 'Replaced the selected text.' };
+}
+
+// =================================================================
+// === Backend Indexing Tools                                    ===
+// =================================================================
+
+async function build_backend_index() {
+  const response = await fetch('/api/build-codebase-index', {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Failed to build backend index: ${error.message}`);
+  }
+  const result = await response.json();
+  return `Backend index built successfully. Indexed ${result.indexedFiles} files and found ${result.totalSymbols} symbols.`;
+}
+
+async function query_backend_index({ query, page = 1, limit = 20 }) {
+  const params = new URLSearchParams({ query, page, limit });
+  const response = await fetch(`/api/query-codebase?${params.toString()}`);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Failed to query backend index: ${error.message}`);
+  }
+  const result = await response.json();
+  return result;
 }
 
 
@@ -641,6 +681,10 @@ const toolRegistry = {
     analyze_code: { handler: _analyzeCode, requiresProject: true, createsCheckpoint: false },
     get_file_history: { handler: _getFileHistory, requiresProject: true, createsCheckpoint: false },
     run_terminal_command: { handler: _runTerminalCommand, requiresProject: true, createsCheckpoint: false },
+
+    // New backend indexer tools
+    build_backend_index: { handler: build_backend_index, requiresProject: true, createsCheckpoint: false },
+    query_backend_index: { handler: query_backend_index, requiresProject: true, createsCheckpoint: false },
 
     // Filesystem modification tools
     create_file: { handler: _createFile, requiresProject: true, createsCheckpoint: true },
