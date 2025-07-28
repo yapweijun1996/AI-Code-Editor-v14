@@ -615,31 +615,53 @@ button:hover {
 }
 
 /* Checkpoints Modal */
-#checkpoints-list {
+#checkpoints-list-container {
   margin-top: 1rem;
   flex-grow: 1;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.checkpoint-entry {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 1rem;
-  align-items: center;
-  padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background-color: var(--input-bg);
+}
+
+#checkpoints-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#checkpoints-table th,
+#checkpoints-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+#checkpoints-table th {
+  background-color: var(--sidebar-bg);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.checkpoint-entry:hover {
+    background-color: var(--editor-tab-bg);
+}
+
+.checkpoint-entry.selected {
+    background-color: var(--primary-hover);
+    color: var(--chat-user-text);
+}
+
+.checkpoint-name, .checkpoint-file {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px; /* Adjust as needed */
 }
 
 .checkpoint-name {
   font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 

@@ -47,9 +47,12 @@ export function initializeEventListeners(appState) {
     const themeToggleButton = document.getElementById('theme-toggle-button');
     const viewCheckpointsButton = document.getElementById('view-checkpoints-button');
     const checkpointsModal = document.getElementById('checkpoints-modal');
-    const checkpointsList = document.getElementById('checkpoints-list');
+    const checkpointsList = document.getElementById('checkpoints-list'); // This is now the tbody
     const closeCheckpointsModalButton = checkpointsModal.querySelector('.close-button');
     const createCheckpointButton = document.getElementById('create-checkpoint-button');
+    const deleteSelectedCheckpointsButton = document.getElementById('delete-selected-checkpoints-button');
+    const selectAllCheckpointsCheckbox = document.getElementById('select-all-checkpoints-checkbox'); // In the controls div
+    const selectAllCheckpointsCheckboxHeader = document.getElementById('select-all-checkpoints-checkbox-header'); // In the table header
     const customRulesButton = document.getElementById('custom-rules-button');
     const customRulesModal = document.getElementById('custom-rules-modal');
     const closeCustomRulesModalButton = customRulesModal.querySelector('.close-button');
@@ -57,6 +60,11 @@ export function initializeEventListeners(appState) {
     const saveCustomRulesButton = document.getElementById('save-custom-rules-button');
     const customRulesModeName = document.getElementById('custom-rules-mode-name');
     const fixErrorsButton = document.getElementById('fix-errors-button');
+    const viewToolLogsButton = document.getElementById('view-tool-logs-button');
+    const toolLogsModal = document.getElementById('tool-logs-modal');
+    const toolLogsList = document.getElementById('tool-logs-list');
+    const closeToolLogsModalButton = toolLogsModal.querySelector('.close-button');
+    const undoButton = document.getElementById('undo-last-change-button');
 
     window.addEventListener('beforeunload', saveCurrentSession);
 
@@ -161,11 +169,14 @@ export function initializeEventListeners(appState) {
         if (event.target == customRulesModal) {
             customRulesModal.style.display = 'none';
         }
+        if (event.target == toolLogsModal) {
+            toolLogsModal.style.display = 'none';
+        }
     });
 
     viewCheckpointsButton.addEventListener('click', async () => {
         const checkpoints = await DbManager.getCheckpoints();
-        UI.renderCheckpoints(checkpointsList, checkpoints);
+        UI.renderCheckpoints(checkpointsModal, checkpoints);
         checkpointsModal.style.display = 'block';
     });
 
@@ -194,7 +205,7 @@ export function initializeEventListeners(appState) {
             alert(`Checkpoint "${checkpointName}" created successfully.`);
             // Refresh the list
             const checkpoints = await DbManager.getCheckpoints();
-            UI.renderCheckpoints(checkpointsList, checkpoints);
+            UI.renderCheckpoints(checkpointsModal, checkpoints);
         } catch (error) {
             console.error('Failed to create checkpoint:', error);
             alert('Error creating checkpoint. See console for details.');
@@ -203,7 +214,11 @@ export function initializeEventListeners(appState) {
 
     checkpointsList.addEventListener('click', async (event) => {
         const target = event.target;
-        if (target.classList.contains('restore-checkpoint-button')) {
+
+        if (target.classList.contains('checkpoint-checkbox')) {
+            updateDeleteSelectedButtonState();
+            updateSelectAllHeaderCheckboxState();
+        } else if (target.classList.contains('restore-checkpoint-button')) {
             const checkpointId = parseInt(target.dataset.id, 10);
             const checkpoint = await DbManager.getCheckpointById(checkpointId);
             if (checkpoint && checkpoint.editorState) {
@@ -217,11 +232,61 @@ export function initializeEventListeners(appState) {
             const checkpointId = parseInt(target.dataset.id, 10);
             if (confirm('Are you sure you want to delete this checkpoint?')) {
                 await DbManager.deleteCheckpoint(checkpointId);
-                const checkpoints = await DbManager.getCheckpoints();
-                UI.renderCheckpoints(checkpointsList, checkpoints);
+                await refreshCheckpointsList();
             }
         }
     });
+
+    const syncCheckboxes = (source, isHeader) => {
+        const checkboxes = checkpointsList.querySelectorAll('.checkpoint-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = source.checked;
+        });
+        if (isHeader) {
+            selectAllCheckpointsCheckbox.checked = source.checked;
+        } else {
+            selectAllCheckpointsCheckboxHeader.checked = source.checked;
+        }
+        updateDeleteSelectedButtonState();
+    };
+
+    selectAllCheckpointsCheckbox.addEventListener('change', () => syncCheckboxes(selectAllCheckpointsCheckbox, false));
+    selectAllCheckpointsCheckboxHeader.addEventListener('change', () => syncCheckboxes(selectAllCheckpointsCheckboxHeader, true));
+
+    deleteSelectedCheckpointsButton.addEventListener('click', async () => {
+        const selectedCheckboxes = checkpointsList.querySelectorAll('.checkpoint-checkbox:checked');
+        if (selectedCheckboxes.length === 0) {
+            alert('Please select at least one checkpoint to delete.');
+            return;
+        }
+
+        if (confirm(`Are you sure you want to delete ${selectedCheckboxes.length} selected checkpoint(s)?`)) {
+            for (const checkbox of selectedCheckboxes) {
+                const checkpointId = parseInt(checkbox.dataset.id, 10);
+                await DbManager.deleteCheckpoint(checkpointId);
+            }
+            await refreshCheckpointsList();
+        }
+    });
+
+    function updateDeleteSelectedButtonState() {
+        const selectedCheckboxes = checkpointsList.querySelectorAll('.checkpoint-checkbox:checked');
+        deleteSelectedCheckpointsButton.disabled = selectedCheckboxes.length === 0;
+    }
+
+    function updateSelectAllHeaderCheckboxState() {
+        const checkboxes = checkpointsList.querySelectorAll('.checkpoint-checkbox');
+        const checkedCount = checkpointsList.querySelectorAll('.checkpoint-checkbox:checked').length;
+        selectAllCheckpointsCheckboxHeader.checked = checkboxes.length > 0 && checkedCount === checkboxes.length;
+        selectAllCheckpointsCheckbox.checked = selectAllCheckpointsCheckboxHeader.checked;
+    }
+
+    async function refreshCheckpointsList() {
+        const checkpoints = await DbManager.getCheckpoints();
+        UI.renderCheckpoints(checkpointsModal, checkpoints);
+        updateDeleteSelectedButtonState();
+        updateSelectAllHeaderCheckboxState();
+    }
 
     customRulesButton.addEventListener('click', async () => {
         const agentModeSelector = document.getElementById('agent-mode-selector');
@@ -345,5 +410,19 @@ export function initializeEventListeners(appState) {
         if (!dropdown.contains(event.target)) {
             dropdown.classList.remove('active');
         }
+    });
+
+    viewToolLogsButton.addEventListener('click', async () => {
+        const logs = await ToolLogger.getLogs();
+        UI.renderToolLogs(toolLogsList, logs);
+        toolLogsModal.style.display = 'block';
+    });
+
+    closeToolLogsModalButton.addEventListener('click', () => {
+        toolLogsModal.style.display = 'none';
+    });
+
+    undoButton.addEventListener('click', () => {
+        GeminiChat.runToolDirectly('undo_last_change', {});
     });
 }

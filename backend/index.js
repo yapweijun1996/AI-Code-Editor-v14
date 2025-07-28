@@ -176,11 +176,12 @@ app.post('/api/duckduckgo-search', async (req, res) => {
 // =================================================================
 
 app.post('/api/build-codebase-index', async (req, res) => {
-  console.log('[API] Received request to build codebase index.');
+  const { ignorePatterns = [] } = req.body;
+  console.log('[API] Received request to build codebase index.', { ignorePatterns });
   try {
     // This can be a long-running process.
     // For a real-world scenario, you'd use a job queue or worker thread.
-    const stats = await codebaseIndexer.buildIndex();
+    const stats = await codebaseIndexer.buildIndex({ ignorePatterns });
     res.json({ status: 'Success', ...stats });
   } catch (error) {
     console.error(`[API] Error building codebase index:`, error);

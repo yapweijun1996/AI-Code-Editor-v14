@@ -105,15 +105,22 @@ function extractSymbols(filePath, content) {
  * @param {string} dir - The directory to start scanning from.
  * @returns {Promise<string[]>} - A list of absolute file paths.
  */
-async function findSupportedFiles(dir) {
+async function findSupportedFiles(dir, ignorePatterns = []) {
     let results = [];
     const list = await fs.readdir(dir, { withFileTypes: true });
+    const defaultIgnores = ['node_modules', '.git'];
+    const combinedIgnores = [...new Set([...defaultIgnores, ...ignorePatterns])];
+
     for (const dirent of list) {
         const fullPath = path.resolve(dir, dirent.name);
+        const relativePath = path.relative(projectRoot, fullPath);
+
+        if (combinedIgnores.some(pattern => relativePath.startsWith(pattern))) {
+            continue;
+        }
+
         if (dirent.isDirectory()) {
-            if (dirent.name !== 'node_modules' && dirent.name !== '.git') {
-                results = results.concat(await findSupportedFiles(fullPath));
-            }
+            results = results.concat(await findSupportedFiles(fullPath, ignorePatterns));
         } else if (SUPPORTED_EXTENSIONS.includes(path.extname(dirent.name))) {
             results.push(fullPath);
         }
@@ -126,9 +133,10 @@ async function findSupportedFiles(dir) {
  * Builds the codebase index by scanning all supported files.
  * @returns {Promise<{indexedFiles: number, totalSymbols: number}>}
  */
-async function buildIndex() {
+async function buildIndex(options = {}) {
+   const { ignorePatterns = [] } = options;
     console.log('[Indexer] Starting codebase scan for supported files...');
-    const files = await findSupportedFiles(projectRoot);
+    const files = await findSupportedFiles(projectRoot, ignorePatterns);
     const index = {};
     let totalSymbols = 0;
 

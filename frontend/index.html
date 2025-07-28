@@ -64,6 +64,7 @@
                   <button id="view-context-button">View Context</button>
                   <button id="condense-context-button">Condense Context</button>
                   <button id="clear-context-button">Clear Context</button>
+                  <button id="view-tool-logs-button">View Tool Logs</button>
                 </div>
               </div>
               <button id="format-button">Format Document</button>
@@ -71,6 +72,7 @@
               <button id="view-checkpoints-button">Checkpoints</button>
               <button id="custom-rules-button">Custom Rules</button>
               <button id="toggle-files-button">Toggle Files</button>
+              <button id="undo-last-change-button" title="Undo Last File Change">Undo</button>
             </div>
           </div>
           <div id="image-preview-container" style="display: none"></div>
@@ -126,8 +128,28 @@
       <div class="modal-content">
         <span class="close-button">&times;</span>
         <h2>Project Checkpoints</h2>
-        <button id="create-checkpoint-button">Create New Checkpoint</button>
-        <div id="checkpoints-list"></div>
+        <div class="checkpoint-controls">
+            <button id="create-checkpoint-button">Create New</button>
+            <button id="delete-selected-checkpoints-button" disabled>Delete Selected</button>
+            <label>
+                <input type="checkbox" id="select-all-checkpoints-checkbox" />
+                Select All
+            </label>
+        </div>
+        <div id="checkpoints-list-container">
+          <table id="checkpoints-table">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="select-all-checkpoints-checkbox-header" /></th>
+                <th>Name</th>
+                <th>File Path</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="checkpoints-list"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -138,6 +160,14 @@
         <p>These rules will be added to the system prompt for the selected AI mode.</p>
         <textarea id="custom-rules-textarea" placeholder="Enter custom rules here..."></textarea>
         <button id="save-custom-rules-button">Save Rules</button>
+      </div>
+    </div>
+
+    <div id="tool-logs-modal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Tool Execution History</h2>
+        <div id="tool-logs-list"></div>
       </div>
     </div>
 
@@ -164,6 +194,8 @@
       import { GoogleGenerativeAI } from 'https://esm.run/@google/generative-ai';
       window.GoogleGenerativeAI = GoogleGenerativeAI;
     </script>
+    <script src="js/tool_logger.js"></script>
+    <script src="js/undo_manager.js"></script>
     <script type="module" src="js/main.js"></script>
   </body>
 </html>

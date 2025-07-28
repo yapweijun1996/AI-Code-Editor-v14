@@ -127,6 +127,10 @@ export async function searchInDirectory(
                 }
             } catch (readError) {
                 console.warn(`Could not read file ${newPath}:`, readError);
+                results.push({
+                    file: newPath,
+                    error: `Could not read file: ${readError.message}`
+                });
             }
         } else if (entry.kind === 'directory') {
             await searchInDirectory(entry, searchTerm, newPath, results, ignorePatterns);

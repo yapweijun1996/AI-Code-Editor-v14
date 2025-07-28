@@ -536,4 +536,31 @@ export const GeminiChat = {
        this.errorTracker.count = 0;
        console.log('Error tracker reset.');
    },
+
+   async runToolDirectly(toolName, params) {
+       if (this.isSending) {
+           UI.showError("Please wait for the current AI operation to complete.");
+           return;
+       }
+
+       const toolCall = { name: toolName, args: params };
+       const chatMessages = document.getElementById('chat-messages');
+       UI.appendMessage(chatMessages, `Running tool: ${toolName}...`, 'ai');
+
+       try {
+           const result = await ToolExecutor.execute(toolCall, this.rootDirectoryHandle);
+           let resultMessage = `Tool '${toolName}' executed successfully.`;
+           if (result.toolResponse && result.toolResponse.response && result.toolResponse.response.message) {
+                resultMessage = result.toolResponse.response.message;
+           } else if (result.toolResponse && result.toolResponse.response && result.toolResponse.response.error) {
+                throw new Error(result.toolResponse.response.error);
+           }
+            UI.appendMessage(chatMessages, resultMessage, 'ai');
+       } catch (error) {
+           const errorMessage = `Error running tool '${toolName}': ${error.message}`;
+           UI.showError(errorMessage);
+           UI.appendMessage(chatMessages, errorMessage, 'ai');
+           console.error(errorMessage, error);
+       }
+   }
 };

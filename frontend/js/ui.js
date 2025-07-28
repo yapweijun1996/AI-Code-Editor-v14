@@ -182,9 +182,13 @@ export function updateImagePreview(imagePreviewContainer, uploadedImage, clearIm
 }
 
 export function renderCheckpoints(checkpointsListContainer, checkpoints) {
-    checkpointsListContainer.innerHTML = '';
+    const tbody = checkpointsListContainer.querySelector('#checkpoints-list');
+    tbody.innerHTML = '';
+
     if (!checkpoints || checkpoints.length === 0) {
-        checkpointsListContainer.innerHTML = '<p>No checkpoints have been saved yet.</p>';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="5" style="text-align:center;">No checkpoints have been saved yet.</td>`;
+        tbody.appendChild(tr);
         return;
     }
 
@@ -192,18 +196,19 @@ export function renderCheckpoints(checkpointsListContainer, checkpoints) {
     checkpoints.sort((a, b) => b.timestamp - a.timestamp);
 
     checkpoints.forEach(cp => {
-        const entry = document.createElement('div');
-        entry.className = 'checkpoint-entry';
-        entry.innerHTML = `
-            <span class="checkpoint-name" title="${cp.name}">${cp.name}</span>
-            <span class="checkpoint-file" title="${cp.filePath}">${cp.filePath}</span>
-            <span class="checkpoint-timestamp">${new Date(cp.timestamp).toLocaleString()}</span>
-            <div>
+        const tr = document.createElement('tr');
+        tr.className = 'checkpoint-entry';
+        tr.innerHTML = `
+            <td><input type="checkbox" class="checkpoint-checkbox" data-id="${cp.id}"></td>
+            <td class="checkpoint-name" title="${cp.name}">${cp.name}</td>
+            <td class="checkpoint-file" title="${cp.filePath || 'N/A'}">${cp.filePath || 'N/A'}</td>
+            <td class="checkpoint-timestamp">${new Date(cp.timestamp).toLocaleString()}</td>
+            <td>
                 <button class="restore-checkpoint-button" data-id="${cp.id}">Restore</button>
                 <button class="delete-checkpoint-button" data-id="${cp.id}">Delete</button>
-            </div>
+            </td>
         `;
-        checkpointsListContainer.appendChild(entry);
+        tbody.appendChild(tr);
     });
 }
 
@@ -280,4 +285,44 @@ export function showError(message, duration = 5000) {
             closeButton.onclick();
         }
     }, duration);
+}
+
+export function renderToolLogs(logsListContainer, logs) {
+    logsListContainer.innerHTML = '';
+    if (!logs || logs.length === 0) {
+        logsListContainer.innerHTML = '<p>No tool executions have been logged yet.</p>';
+        return;
+    }
+
+    // Newest first
+    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    logs.forEach(log => {
+        const entry = document.createElement('details');
+        entry.className = 'tool-log-entry-details';
+
+        const summary = document.createElement('summary');
+        summary.className = `tool-log-summary ${log.status.toLowerCase()}`;
+        summary.innerHTML = `
+            <span class="log-status">${log.status === 'Success' ? '✔' : '✖'}</span>
+            <strong class="log-tool-name">${log.toolName}</strong>
+            <span class="log-timestamp">${new Date(log.timestamp).toLocaleString()}</span>
+        `;
+
+        const content = document.createElement('div');
+        content.className = 'tool-log-content';
+        
+        const paramsPre = document.createElement('pre');
+        paramsPre.textContent = `Parameters: ${JSON.stringify(log.params, null, 2)}`;
+        
+        const resultPre = document.createElement('pre');
+        resultPre.textContent = `Result: ${JSON.stringify(log.result, null, 2)}`;
+        
+        content.appendChild(paramsPre);
+        content.appendChild(resultPre);
+
+        entry.appendChild(summary);
+        entry.appendChild(content);
+        logsListContainer.appendChild(entry);
+    });
 }

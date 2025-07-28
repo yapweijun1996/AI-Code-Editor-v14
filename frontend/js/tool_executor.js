@@ -177,6 +177,14 @@ async function _rewriteFile({ filename, content }, rootHandle) {
     if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
         throw new Error('Permission to write to the file was denied.');
     }
+    try {
+        const file = await fileHandle.getFile();
+        const originalContent = await file.text();
+        UndoManager.push(filename, originalContent);
+    } catch (e) {
+        // File doesn't exist, push empty content for undo
+        UndoManager.push(filename, '');
+    }
    const writable = await fileHandle.createWritable();
    await writable.write(cleanContent);
    await writable.close();
@@ -227,6 +235,7 @@ async function _insertContent({ filename, line_number, content }, rootHandle) {
    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
    const file = await fileHandle.getFile();
    const originalContent = await file.text();
+   UndoManager.push(filename, originalContent);
    const lines = originalContent.split('\n');
    const insertionPoint = Math.max(0, line_number - 1);
    lines.splice(insertionPoint, 0, cleanContent);
@@ -262,6 +271,7 @@ async function _replaceLines({ filename, start_line, end_line, new_content }, ro
 
     const file = await fileHandle.getFile();
     const originalContent = await file.text();
+    UndoManager.push(filename, originalContent);
     const lines = originalContent.split('\n');
 
     const before = lines.slice(0, start_line - 1);
@@ -291,6 +301,7 @@ async function _applyDiff({ filename, patch_content }, rootHandle) {
     const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
     const file = await fileHandle.getFile();
     const originalContent = await file.text();
+    UndoManager.push(filename, originalContent);
     
     let patchText = patch_content;
     if (typeof patch_content !== 'string') {
@@ -347,6 +358,7 @@ async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
 
     const file = await fileHandle.getFile();
     const originalContent = await file.text();
+    UndoManager.push(filename, originalContent);
     const cleanNewContent = stripMarkdownCodeBlock(new_content);
 
     const LARGE_FILE_THRESHOLD_BYTES = 250000; // 250KB
@@ -436,7 +448,20 @@ async function _searchCode({ search_term }, rootHandle) {
     const ignorePatterns = await FileSystem.getIgnorePatterns(rootHandle);
     const searchResults = [];
     await FileSystem.searchInDirectory(rootHandle, search_term, '', searchResults, ignorePatterns);
-    return { results: searchResults };
+   
+   const successfulResults = searchResults.filter(r => r.matches);
+   const erroredFiles = searchResults.filter(r => r.error);
+
+   let summary = `Search complete. Found ${successfulResults.length} files with matches.`;
+   if (erroredFiles.length > 0) {
+       summary += ` Failed to search ${erroredFiles.length} files.`;
+   }
+
+    return {
+       summary: summary,
+       results: successfulResults,
+       errors: erroredFiles
+   };
 }
 
 async function _buildCodebaseIndex(params, rootHandle) {
@@ -495,6 +520,7 @@ async function _formatCode({ filename }, rootHandle) {
             const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
             const file = await fileHandle.getFile();
             const originalContent = await file.text();
+            UndoManager.push(filename, originalContent);
             const parser = Editor.getPrettierParser(filename);
             
             if (!parser) {
@@ -672,10 +698,13 @@ async function _replaceSelectedText({ new_text }) {
 // === Backend Indexing Tools                                    ===
 // =================================================================
 
-async function build_backend_index() {
-  const response = await fetch('/api/build-codebase-index', {
-    method: 'POST',
-  });
+async function build_backend_index(params, rootHandle) {
+   const ignorePatterns = await FileSystem.getIgnorePatterns(rootHandle);
+   const response = await fetch('/api/build-codebase-index', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ ignorePatterns }),
+   });
   if (!response.ok) {
     const error = await response.json();
     throw new Error(`Failed to build backend index: ${error.message}`);
@@ -695,6 +724,24 @@ async function query_backend_index({ query, page = 1, limit = 20 }) {
   return result;
 }
 
+
+async function _undoLastChange(params, rootHandle) {
+   const lastState = UndoManager.pop();
+   if (!lastState) {
+       return { message: "No file modifications to undo." };
+   }
+
+   const { filename, content } = lastState;
+   await _rewriteFile({ filename, content }, rootHandle);
+   
+   // After undoing, we don't want the user to "redo" the undo, so don't push to stack again.
+   // The rewriteFile call inside this function will have pushed the state *before* the undo.
+   // We need to pop that off to prevent a confusing redo state.
+   UndoManager.pop();
+
+
+   return { message: `Undid the last change to '${filename}'.` };
+}
 
 async function _listTools() {
    const toolNames = Object.keys(toolRegistry);
@@ -745,6 +792,7 @@ const toolRegistry = {
     replace_selected_text: { handler: _replaceSelectedText, requiresProject: false, createsCheckpoint: false },
     set_selected_text: { handler: _setSelectedText, requiresProject: false, createsCheckpoint: false },
     create_diff: { handler: _createDiff, requiresProject: false, createsCheckpoint: false },
+    undo_last_change: { handler: _undoLastChange, requiresProject: true, createsCheckpoint: false },
 };
 
 // --- Core Execution Logic ---
@@ -799,12 +847,14 @@ export async function execute(toolCall, rootDirectoryHandle) {
 
     try {
         resultForModel = await executeTool(toolCall, rootDirectoryHandle);
+        ToolLogger.log(toolName, parameters, 'Success', resultForModel);
     } catch (error) {
         isSuccess = false;
         const errorMessage = `Error executing tool '${toolName}': ${error.message}`;
         resultForModel = { error: errorMessage };
         UI.showError(errorMessage);
         console.error(errorMessage, error);
+        ToolLogger.log(toolName, parameters, 'Error', { message: error.message, stack: error.stack });
     }
 
     if (isSuccess && TOOLS_REQUIRING_SYNTAX_CHECK.includes(toolName)) {
