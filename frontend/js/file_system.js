@@ -1,3 +1,16 @@
+export async function getIgnorePatterns(rootDirHandle) {
+    try {
+        const ignoreFileHandle = await rootDirHandle.getFileHandle('.ai_ignore');
+        const file = await ignoreFileHandle.getFile();
+        const content = await file.text();
+        return content.split('\n')
+            .map(line => line.trim())
+            .filter(line => line && !line.startsWith('#'));
+    } catch (e) {
+        return [];
+    }
+}
+
 export async function getFileHandleFromPath(dirHandle, path, options = {}) {
     const parts = path.split('/').filter((p) => p);
     let currentHandle = dirHandle;
@@ -80,13 +93,18 @@ export async function renameEntry(rootDirHandle, oldPath, newPath) {
 }
 
 export async function searchInDirectory(
-dirHandle,
-searchTerm,
-currentPath,
-results,
+    dirHandle,
+    searchTerm,
+    currentPath,
+    results,
+    ignorePatterns
 ) {
     for await (const entry of dirHandle.values()) {
         const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        if (ignorePatterns.some(pattern => newPath.startsWith(pattern.replace(/\/$/, '')))) {
+            continue;
+        }
+
         if (entry.kind === 'file') {
             try {
                 const file = await entry.getFile();
@@ -111,37 +129,48 @@ results,
                 console.warn(`Could not read file ${newPath}:`, readError);
             }
         } else if (entry.kind === 'directory') {
-            await searchInDirectory(entry, searchTerm, newPath, results);
+            await searchInDirectory(entry, searchTerm, newPath, results, ignorePatterns);
         }
     }
 }
 
-export async function buildStructureTree(dirHandle) {
-    const root = {
-        name: dirHandle.name,
-        kind: 'directory',
-        children: []
-    };
-
+async function _buildStructureTreeRecursive(dirHandle, ignorePatterns, currentPath) {
+    const children = [];
     for await (const entry of dirHandle.values()) {
+        const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        if (ignorePatterns.some(pattern => newPath.startsWith(pattern.replace(/\/$/, '')))) {
+            continue;
+        }
+
         if (entry.kind === 'directory') {
-            const childNode = await buildStructureTree(entry);
-            root.children.push(childNode);
-        } else {
-            root.children.push({
+            const childNode = {
                 name: entry.name,
-                kind: 'file',
+                kind: 'directory',
+                children: await _buildStructureTreeRecursive(entry, ignorePatterns, newPath)
+            };
+            children.push(childNode);
+        } else {
+            children.push({
+                name: entry.name,
+                kind: 'file'
             });
         }
     }
-
-    // Sort so folders appear before files
-    root.children.sort((a, b) => {
+    // Sort
+    children.sort((a, b) => {
         if (a.kind === 'directory' && b.kind !== 'directory') return -1;
         if (a.kind !== 'directory' && b.kind === 'directory') return 1;
         return a.name.localeCompare(b.name);
     });
+    return children;
+}
 
+export async function buildStructureTree(dirHandle, ignorePatterns) {
+    const root = {
+        name: dirHandle.name,
+        kind: 'directory',
+        children: await _buildStructureTreeRecursive(dirHandle, ignorePatterns, '')
+    };
     return root;
 }
 
@@ -160,16 +189,19 @@ export function formatTreeToString(node, prefix = '') {
     return result;
 };
 
-export const buildTree = async (dirHandle, currentPath = '') => {
+export const buildTree = async (dirHandle, ignorePatterns, currentPath = '') => {
     const children = [];
     for await (const entry of dirHandle.values()) {
         const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        if (ignorePatterns.some(pattern => newPath.startsWith(pattern.replace(/\/$/, '')))) {
+            continue;
+        }
         if (entry.kind === 'directory') {
             children.push({
                 id: newPath,
                 text: entry.name,
                 type: 'folder',
-                children: await buildTree(entry, newPath),
+                children: await buildTree(entry, ignorePatterns, newPath),
             });
         } else {
             children.push({

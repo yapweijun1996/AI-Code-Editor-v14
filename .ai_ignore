@@ -1,0 +1,9 @@
+# Directories to ignore for AI processing
+node_modules/
+dist/
+build/
+.git/
+.vscode/
+
+# Log files
+*.log

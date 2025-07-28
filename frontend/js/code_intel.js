@@ -22,22 +22,21 @@ export const CodebaseIndexer = {
         return { index: existingIndex, stats };
     },
 
-    async traverseAndIndex(dirHandle, currentPath, index, lastIndexTimestamp, stats, allFilePathsInProject) {
-        const ignoreDirs = ['.git', 'node_modules', 'dist', 'build'];
-        if (ignoreDirs.includes(dirHandle.name)) return;
-
+    async traverseAndIndex(dirHandle, currentPath, index, lastIndexTimestamp, stats, allFilePathsInProject, ignorePatterns) {
         for await (const entry of dirHandle.values()) {
-            const newPath = currentPath
-            ? `${currentPath}/${entry.name}`
-            : entry.name;
-            
+            const newPath = currentPath ?
+                `${currentPath}/${entry.name}` :
+                entry.name;
+            if (ignorePatterns.some(pattern => newPath.startsWith(pattern.replace(/\/$/, '')))) {
+                continue;
+            }
+
             if (entry.kind === 'file') {
-                allFilePathsInProject.add(newPath); // Add file path to the set
+                allFilePathsInProject.add(newPath);
 
                 if (entry.name.match(/\.(js|html|css|md|json|py|java|ts)$/)) {
                     try {
                         const file = await entry.getFile();
-                        // If lastIndexTimestamp is provided and file is not modified, skip it.
                         if (lastIndexTimestamp && file.lastModified <= lastIndexTimestamp) {
                             stats.skippedFileCount++;
                             continue;
@@ -50,7 +49,7 @@ export const CodebaseIndexer = {
                     }
                 }
             } else if (entry.kind === 'directory') {
-                await this.traverseAndIndex(entry, newPath, index, lastIndexTimestamp, stats, allFilePathsInProject);
+                await this.traverseAndIndex(entry, newPath, index, lastIndexTimestamp, stats, allFilePathsInProject, ignorePatterns);
             }
         }
     },

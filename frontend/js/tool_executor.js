@@ -20,7 +20,8 @@ function stripMarkdownCodeBlock(content) {
 // --- Tool Handlers ---
 
 async function _getProjectStructure(params, rootHandle) {
-    const tree = await FileSystem.buildStructureTree(rootHandle);
+    const ignorePatterns = await FileSystem.getIgnorePatterns(rootHandle);
+    const tree = await FileSystem.buildStructureTree(rootHandle, ignorePatterns);
     const structure = FileSystem.formatTreeToString(tree);
     return { structure };
 }
@@ -426,8 +427,9 @@ async function _renameFolder({ old_folder_path, new_folder_path }, rootHandle) {
 }
 
 async function _searchCode({ search_term }, rootHandle) {
+    const ignorePatterns = await FileSystem.getIgnorePatterns(rootHandle);
     const searchResults = [];
-    await FileSystem.searchInDirectory(rootHandle, search_term, '', searchResults);
+    await FileSystem.searchInDirectory(rootHandle, search_term, '', searchResults, ignorePatterns);
     return { results: searchResults };
 }
 
@@ -438,7 +440,8 @@ async function _buildCodebaseIndex(params, rootHandle) {
     const lastIndexTimestamp = await DbManager.getLastIndexTimestamp() || 0;
     const existingIndex = await DbManager.getCodeIndex();
     
-    const { index: newIndex, stats } = await CodebaseIndexer.buildIndex(rootHandle, { lastIndexTimestamp, existingIndex });
+    const ignorePatterns = await FileSystem.getIgnorePatterns(rootHandle);
+    const { index: newIndex, stats } = await CodebaseIndexer.buildIndex(rootHandle, { lastIndexTimestamp, existingIndex, ignorePatterns });
     
     await DbManager.saveCodeIndex(newIndex);
     await DbManager.saveLastIndexTimestamp(startTime);
