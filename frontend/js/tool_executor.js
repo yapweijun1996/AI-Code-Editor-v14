@@ -179,6 +179,44 @@ async function _insertContent({ filename, line_number, content }, rootHandle) {
     return { message: `Content inserted into '${filename}' at line ${line_number}.` };
 }
 
+async function _replaceLines({ filename, start_line, end_line, new_content }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required.");
+    if (typeof start_line !== 'number' || typeof end_line !== 'number') {
+        throw new Error("The 'start_line' and 'end_line' parameters must be numbers.");
+    }
+    if (start_line > end_line) {
+        throw new Error("The 'start_line' must not be after the 'end_line'.");
+    }
+
+    const cleanNewContent = stripMarkdownCodeBlock(new_content);
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
+        throw new Error('Permission to write to the file was denied.');
+    }
+
+    const file = await fileHandle.getFile();
+    const originalContent = await file.text();
+    const lines = originalContent.split('\n');
+
+    const before = lines.slice(0, start_line - 1);
+    const after = lines.slice(end_line);
+    const newLines = cleanNewContent.split('\n');
+
+    const updatedContent = [...before, ...newLines, ...after].join('\n');
+
+    const writable = await fileHandle.createWritable();
+    await writable.write(updatedContent);
+    await writable.close();
+
+    if (Editor.getOpenFiles().has(filename)) {
+        Editor.getOpenFiles().get(filename)?.model.setValue(updatedContent);
+    }
+    await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
+    document.getElementById('chat-input').focus();
+
+    return { message: `Lines ${start_line}-${end_line} in '${filename}' were replaced successfully.` };
+}
+
 async function _applyDiff({ filename, patch_content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for apply_diff.");
     if (!patch_content) throw new Error("The 'patch_content' parameter is required for apply_diff.");
@@ -493,6 +531,7 @@ const toolRegistry = {
     rename_file: { handler: _renameFile, requiresProject: true, createsCheckpoint: true },
     insert_content: { handler: _insertContent, requiresProject: true, createsCheckpoint: true },
     apply_diff: { handler: _applyDiff, requiresProject: true, createsCheckpoint: true },
+    replace_lines: { handler: _replaceLines, requiresProject: true, createsCheckpoint: true },
     create_and_apply_diff: { handler: _createAndApplyDiff, requiresProject: true, createsCheckpoint: true },
     create_folder: { handler: _createFolder, requiresProject: true, createsCheckpoint: true },
     delete_folder: { handler: _deleteFolder, requiresProject: true, createsCheckpoint: true },
@@ -544,7 +583,7 @@ async function executeTool(toolCall, rootDirectoryHandle) {
     return tool.handler(parameters, rootDirectoryHandle);
 }
 
-const TOOLS_REQUIRING_SYNTAX_CHECK = ['rewrite_file', 'insert_content', 'replace_selected_text', 'apply_diff'];
+const TOOLS_REQUIRING_SYNTAX_CHECK = ['rewrite_file', 'insert_content', 'replace_selected_text', 'apply_diff', 'replace_lines'];
 
 export async function execute(toolCall, rootDirectoryHandle) {
     const toolName = toolCall.name;
