@@ -326,3 +326,22 @@ export function renderToolLogs(logsListContainer, logs) {
         logsListContainer.appendChild(entry);
     });
 }
+export async function updateIndexedDBUsage() {
+  const usageElement = document.getElementById('indexeddb-usage');
+  if (!usageElement) return;
+
+  if (!('storage' in navigator && 'estimate' in navigator.storage)) {
+    usageElement.textContent = "Storage usage info unavailable.";
+    return;
+  }
+  try {
+    const { usage, quota } = await navigator.storage.estimate();
+    const percent = quota ? ((usage / quota) * 100).toFixed(2) : '?';
+    const toMB = b => (b / (1024 * 1024)).toFixed(2) + " MB";
+    usageElement.textContent =
+      `Storage usage: ${toMB(usage)} of ${toMB(quota)} (${percent}%)`;
+  } catch (e) {
+    usageElement.textContent = "Could not retrieve storage usage.";
+    console.error("Error estimating storage:", e);
+  }
+}

@@ -717,3 +717,10 @@ button:hover {
     margin-left: 15px;
     padding: 0 5px;
 }
+
+.storage-usage-info {
+  color: var(--text-secondary, #aaa);
+  font-style: italic;
+  font-size: 0.95em;
+  margin-top: 10px;
+}

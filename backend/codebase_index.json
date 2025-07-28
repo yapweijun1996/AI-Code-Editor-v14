@@ -71,6 +71,7 @@
     "#checkpoints-table",
     "#select-all-checkpoints-checkbox-header",
     "#checkpoints-list",
+    "#indexeddb-usage",
     "#custom-rules-modal",
     "#custom-rules-mode-name",
     "#custom-rules-textarea",
@@ -88,6 +89,7 @@
     ".modal",
     ".modal-content",
     ".close-button",
-    ".checkpoint-controls"
+    ".checkpoint-controls",
+    ".storage-usage-info"
   ]
 }

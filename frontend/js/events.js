@@ -178,6 +178,7 @@ export function initializeEventListeners(appState) {
         const checkpoints = await DbManager.getCheckpoints();
         UI.renderCheckpoints(checkpointsModal, checkpoints);
         checkpointsModal.style.display = 'block';
+        UI.updateIndexedDBUsage();
     });
 
     closeCheckpointsModalButton.addEventListener('click', () => {
