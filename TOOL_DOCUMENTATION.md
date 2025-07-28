@@ -8,7 +8,8 @@ This guide provides details on specific tools, their behaviors, and best practic
 
 - **`rewrite_file`**: This tool now functions as an "upsert" operation. If the specified file does not exist, it will be **created**. If the file already exists, its content will be completely **overwritten**.
 
-- **`format_code`**: This tool is now powered by a reliable backend implementation using **Prettier**. It automatically detects the file type, applies the correct formatting rules, and **overwrites the file** with the formatted code.
+- **`format_code`**: This tool runs entirely on the **client-side** using a Web Worker with **Prettier**. It automatically detects the file type, applies the correct formatting rules, and **overwrites the file** with the formatted code.
+  - **Important**: This tool requires the file to contain **valid code** corresponding to its file extension (e.g., valid JavaScript for a `.js` file). Running it on plain text files or files with syntax errors will result in a parser error from Prettier.
 
 - **Selection-Based Tools (`get_selected_text`, `replace_selected_text`)**: These tools require the user to **manually select text** in the editor before execution. They will return a helpful error message if no text is selected.
 

@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "acorn": "^8.15.0",
+    "acorn-walk": "^8.3.2",
     "axios": "^1.11.0",
     "cheerio": "^1.1.2",
     "chokidar": "^4.0.3",

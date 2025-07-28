@@ -1,1 +1,17 @@
-{}
+{
+  "frontend/js/tool_executor.js": [
+    "stripMarkdownCodeBlock",
+    "_getProjectStructure",
+    "_readFile",
+    "_readFileLines"
+  ],
+  "TOOL_DOCUMENTATION.md": [
+    "Tool Documentation",
+    "General Tool Notes & Recent Updates",
+    "Code Indexing and Searching Tools",
+    "1. Backend Indexer (`build_backend_index`, `query_backend_index`) - **Recommended for Large Projects**",
+    "2. Frontend Indexer (`build_or_update_codebase_index`, `query_codebase`) - **Legacy**",
+    "`search_code` (Real-time File Search)",
+    "Summary and Recommendations"
+  ]
+}

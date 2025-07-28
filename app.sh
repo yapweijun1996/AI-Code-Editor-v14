@@ -51,6 +51,8 @@ install_deps() {
 }
 
 start_server() {
+    echo "Ensuring backend dependencies are up to date..."
+    (cd backend && npm install)
     echo "Starting the backend server with PM2..."
     pm2 start backend/index.js --name "$PM2_APP_NAME"
     if [ $? -ne 0 ]; then
@@ -66,6 +68,8 @@ stop_server() {
 }
 
 restart_server() {
+    echo "Ensuring backend dependencies are up to date..."
+    (cd backend && npm install)
     echo "Restarting the server..."
     pm2 restart "$PM2_APP_NAME"
 }

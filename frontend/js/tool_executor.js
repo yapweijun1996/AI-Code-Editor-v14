@@ -486,26 +486,58 @@ async function _reindexCodebasePaths({ paths }, rootHandle) {
 }
 
 async function _formatCode({ filename }, rootHandle) {
-    const response = await fetch('/api/format-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename }),
-    });
+    return new Promise(async (resolve, reject) => {
+        if (!filename) {
+            return reject(new Error("The 'filename' parameter is required."));
+        }
 
-    const result = await response.json();
-
-    if (result.status === 'Success') {
-        // If the formatted file is open in the editor, refresh its content
-        if (Editor.getOpenFiles().has(filename)) {
+        try {
             const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
             const file = await fileHandle.getFile();
-            const newContent = await file.text();
-            Editor.getOpenFiles().get(filename)?.model.setValue(newContent);
+            const originalContent = await file.text();
+            const parser = Editor.getPrettierParser(filename);
+            
+            if (!parser) {
+                return reject(new Error(`Could not determine Prettier parser for file: ${filename}`));
+            }
+
+            const prettierWorker = new Worker('prettier.worker.js');
+
+            prettierWorker.onmessage = async (event) => {
+                if (event.data.success) {
+                    const formattedCode = event.data.formattedCode;
+                    
+                    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
+                        return reject(new Error('Permission to write to the file was denied.'));
+                    }
+                    
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(formattedCode);
+                    await writable.close();
+
+                    if (Editor.getOpenFiles().has(filename)) {
+                        Editor.getOpenFiles().get(filename)?.model.setValue(formattedCode);
+                    }
+                    
+                    resolve({ message: `File '${filename}' formatted successfully.` });
+                } else {
+                    console.error('Error formatting file from worker:', event.data.error);
+                    reject(new Error(`An error occurred while formatting the file: ${event.data.error}`));
+                }
+                prettierWorker.terminate();
+            };
+            
+            prettierWorker.onerror = (error) => {
+                reject(new Error(`Prettier worker error: ${error.message}`));
+                prettierWorker.terminate();
+            };
+
+            prettierWorker.postMessage({ code: originalContent, parser });
+
+        } catch (error) {
+            reject(new Error(`Failed to format code: ${error.message}`));
         }
-        return { message: result.message };
-    } else {
-        throw new Error(result.message || 'An unknown error occurred during formatting.');
-    }
+    });
 }
 
 async function _analyzeCode({ filename }, rootHandle) {
@@ -664,9 +696,15 @@ async function query_backend_index({ query, page = 1, limit = 20 }) {
 }
 
 
+async function _listTools() {
+   const toolNames = Object.keys(toolRegistry);
+   return { tools: toolNames };
+}
+
 // --- Tool Registry ---
 
 const toolRegistry = {
+   list_tools: { handler: _listTools, requiresProject: false, createsCheckpoint: false },
     // Project-based tools
     get_project_structure: { handler: _getProjectStructure, requiresProject: true, createsCheckpoint: false },
     read_file: { handler: _readFile, requiresProject: true, createsCheckpoint: false },
