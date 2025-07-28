@@ -33,10 +33,10 @@ The editor's architecture has been streamlined to use a local Node.js server, si
 *   **Automatic File Opening**: When the AI agent reads, creates, or rewrites a file, it is automatically opened or focused, providing immediate visibility into the agent's actions.
 *   **AST-Powered Code Analysis**: The AI can use the `analyze_code` tool to parse JavaScript code into an Abstract Syntax Tree (AST), enabling a deep, structural understanding of the code for more precise refactoring and analysis.
 *   **Efficient File Modifications**: The AI has access to multiple tools for file modifications, allowing it to choose the most efficient method for each task:
-    *   **`rewrite_file`**: Replaces the entire content of a file, ideal for large-scale changes.
     *   **`insert_content`**: Inserts content at a specific line number, perfect for adding new functions or blocks of code.
-    *   **`apply_diff`**: Applies a patch to a file, enabling efficient, targeted changes.
     *   **`replace_selected_text`**: Replaces only the currently selected text, offering a highly performant option for iterative refactoring.
+    *   **`create_and_apply_diff`**: Performs a line-based comparison of the file's original and new content to create and apply a patch. This method is highly efficient for targeted changes in large files and prevents common recursion errors.
+    *   **`rewrite_file`**: Replaces the entire content of a file, ideal for large-scale changes or creating new files.
 *   **Multimodal Input**: The AI chat supports both text and image uploads, allowing you to ask questions about visual content.
 *   **Multiple Agent Modes**: Switch between different AI modes (`Code`, `Plan`, `Search`) to tailor the agent's behavior to your specific needs.
 *   **Persistent Model Selection**: The application remembers your chosen AI model across sessions, saving you from having to re-select it on every visit.
@@ -53,6 +53,7 @@ The editor's architecture has been streamlined to use a local Node.js server, si
     *   **API Stability**: Resolved a critical bug that caused an API error when the AI responded after a tool call, ensuring a stable and reliable chat experience.
     *   **File Path Correction**: Fixed an issue where the `get_project_structure` tool generated incorrect, nested file paths, improving the reliability of file operations.
     *   **Session Handling**: Addressed a bug where a restored project folder from a previous session was not correctly recognized by the AI's tools.
+    *   **Diffing Stability**: Fixed a critical `Maximum call stack size exceeded` error in the diffing tool by implementing a line-based diffing algorithm. This ensures that modifications to large or complex files are handled efficiently and without crashing.
 
 ---
 

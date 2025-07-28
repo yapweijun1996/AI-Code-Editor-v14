@@ -139,3 +139,59 @@ graph TD
 
     style E fill:#d4edda,stroke:#155724,stroke-width:2px
 ```
+
+
+---
+
+## High-Performance Diffing Architecture
+
+The `create_and_apply_diff` tool provides an efficient and stable way to modify files. To avoid performance bottlenecks and stack overflow errors when processing large files, the application uses a **line-based diffing strategy** implemented in `frontend/js/tool_executor.js`.
+
+This approach, powered by the `diff-match-patch` library, avoids a direct, character-by-character comparison of the entire file content. Instead, it converts each line into a single character, performs the diff on this much smaller dataset, and then translates the results back into line-based changes.
+
+The workflow is as follows:
+
+```mermaid
+graph TD
+    subgraph "File Content"
+        A[Original File Content]
+        B[New File Content]
+    end
+
+    subgraph "Line-to-Char Mapping"
+        C[dmp.diff_linesToChars_()]
+    end
+
+    subgraph "Core Diffing"
+        D[dmp.diff_main()]
+    end
+
+    subgraph "Char-to-Line Restoration"
+        E[dmp.diff_charsToLines_()]
+    end
+
+    subgraph "Patch Generation & Application"
+        F[dmp.patch_make()]
+        G[dmp.patch_apply()]
+    end
+    
+    H[Patched File Content]
+
+    A -- feeds --> C
+    B -- feeds --> C
+    C -- provides line arrays & char representations --> D
+    D -- generates diffs --> E
+    E -- restores line data to diffs --> F
+    F -- creates patches --> G
+    A -- provides original content for patching --> F
+    A -- provides original content for applying patch --> G
+    G -- outputs --> H
+
+    style C fill:#d4edda,stroke:#155724,stroke-width:2px
+    style D fill:#cce5ff,stroke:#004085,stroke-width:2px
+    style E fill:#d4edda,stroke:#155724,stroke-width:2px
+    style F fill:#fff3cd,stroke:#856404,stroke-width:2px
+    style G fill:#fff3cd,stroke:#856404,stroke-width:2px
+```
+
+This architecture ensures that the diffing process is both fast and memory-efficient, making the AI agent's file modification capabilities robust and scalable.
