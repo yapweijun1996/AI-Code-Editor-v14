@@ -236,10 +236,7 @@ async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for create_and_apply_diff.");
     if (new_content === undefined) throw new Error("The 'new_content' parameter is required for create_and_apply_diff.");
 
-    const dmp = new diff_match_patch();
     const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
-
-    // First, ensure we have permission to write to the file.
     if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
         throw new Error('Permission to write to the file was denied.');
     }
@@ -248,31 +245,53 @@ async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
     const originalContent = await file.text();
     const cleanNewContent = stripMarkdownCodeBlock(new_content);
 
-    // Use a line-based diff to avoid stack overflow on large files.
-    const a = dmp.diff_linesToChars_(originalContent, cleanNewContent);
-    const lineText1 = a.chars1;
-    const lineText2 = a.chars2;
-    const lineArray = a.lineArray;
-    const diffs = dmp.diff_main(lineText1, lineText2, false);
-    dmp.diff_charsToLines_(diffs, lineArray);
+    const LARGE_FILE_THRESHOLD_BYTES = 250000; // 250KB
 
-    const patches = dmp.patch_make(originalContent, diffs);
-    const [patchedContent, results] = dmp.patch_apply(patches, originalContent);
+    let finalContent = cleanNewContent;
+    let method = 'diff';
 
-    if (results.some(r => !r)) {
-        throw new Error(`Failed to apply patch to '${filename}'. The patch may not be valid.`);
+    if (file.size > LARGE_FILE_THRESHOLD_BYTES) {
+        method = 'rewrite';
+    } else {
+        try {
+            const dmp = new diff_match_patch();
+            const a = dmp.diff_linesToChars_(originalContent, cleanNewContent);
+            const lineText1 = a.chars1;
+            const lineText2 = a.chars2;
+            const lineArray = a.lineArray;
+            const diffs = dmp.diff_main(lineText1, lineText2, false);
+            dmp.diff_charsToLines_(diffs, lineArray);
+            const patches = dmp.patch_make(originalContent, diffs);
+
+            // Check if a valid patch could be created. If not, fall back to rewrite.
+            if (patches.length === 0 && originalContent !== cleanNewContent) {
+                 console.warn(`Diff generation failed for ${filename}, falling back to rewrite.`);
+                 method = 'rewrite';
+            } else {
+                 const [patchedContent, results] = dmp.patch_apply(patches, originalContent);
+                 if (results.some(r => !r)) {
+                     console.warn(`Patch application failed for ${filename}, falling back to rewrite.`);
+                     method = 'rewrite';
+                 } else {
+                     finalContent = patchedContent;
+                 }
+            }
+        } catch (error) {
+            console.error(`Diff/patch process for ${filename} failed with error: ${error.message}. Falling back to rewrite.`);
+            method = 'rewrite';
+        }
     }
 
     const writable = await fileHandle.createWritable();
-    await writable.write(patchedContent);
+    await writable.write(finalContent);
     await writable.close();
 
     if (Editor.getOpenFiles().has(filename)) {
-        Editor.getOpenFiles().get(filename)?.model.setValue(patchedContent);
+        Editor.getOpenFiles().get(filename)?.model.setValue(finalContent);
     }
     await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
     document.getElementById('chat-input').focus();
-    return { message: `Patch applied to '${filename}' successfully.` };
+    return { message: `File '${filename}' updated successfully (Method: ${method}).` };
 }
 
 async function _createFolder({ folder_path }, rootHandle) {
