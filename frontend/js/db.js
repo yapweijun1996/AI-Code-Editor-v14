@@ -11,11 +11,12 @@ export const DbManager = {
         checkpoints: 'checkpoints',
         settings: 'settings',
         customRules: 'customRules',
+        chatHistory: 'chatHistory',
     },
     async openDb() {
         return new Promise((resolve, reject) => {
             if (this.db) return resolve(this.db);
-            const request = indexedDB.open(this.dbName, 8);
+            const request = indexedDB.open(this.dbName, 9);
             request.onerror = () => reject('Error opening IndexedDB.');
             request.onsuccess = (event) => {
                 this.db = event.target.result;
@@ -47,6 +48,9 @@ export const DbManager = {
                 }
                 if (!db.objectStoreNames.contains(this.stores.customRules)) {
                     db.createObjectStore(this.stores.customRules, { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains(this.stores.chatHistory)) {
+                    db.createObjectStore(this.stores.chatHistory, { keyPath: 'id' });
                 }
             };
         });
@@ -247,6 +251,40 @@ export const DbManager = {
             request.onerror = () => resolve(null);
             request.onsuccess = () =>
                 resolve(request.result ? request.result.rules : null);
+        });
+    },
+    async saveChatHistory(history) {
+        const db = await this.openDb();
+        return new Promise((resolve, reject) => {
+            const request = db
+                .transaction(this.stores.chatHistory, 'readwrite')
+                .objectStore(this.stores.chatHistory)
+                .put({ id: 'current_chat', history });
+            request.onerror = () => reject('Error saving chat history.');
+            request.onsuccess = () => resolve();
+        });
+    },
+    async getChatHistory() {
+        const db = await this.openDb();
+        return new Promise((resolve) => {
+            const request = db
+                .transaction(this.stores.chatHistory, 'readonly')
+                .objectStore(this.stores.chatHistory)
+                .get('current_chat');
+            request.onerror = () => resolve([]);
+            request.onsuccess = () =>
+                resolve(request.result ? request.result.history : []);
+        });
+    },
+    async clearChatHistory() {
+        const db = await this.openDb();
+        return new Promise((resolve, reject) => {
+            const request = db
+                .transaction(this.stores.chatHistory, 'readwrite')
+                .objectStore(this.stores.chatHistory)
+                .delete('current_chat');
+            request.onerror = () => reject('Error clearing chat history.');
+            request.onsuccess = () => resolve();
         });
     },
 };

@@ -36,6 +36,14 @@ export const GeminiChat = {
         if (savedMode && modeSelector) {
             modeSelector.value = savedMode;
         }
+
+        const chatHistory = await DbManager.getChatHistory();
+        if (chatHistory.length > 0) {
+            console.log(`[Chat History] Found ${chatHistory.length} messages in IndexedDB.`);
+            const chatMessages = document.getElementById('chat-messages');
+            UI.renderChatHistory(chatMessages, chatHistory);
+            await this._startChat(chatHistory);
+        }
     },
 
     async _startChat(history = []) {
@@ -347,6 +355,8 @@ export const GeminiChat = {
                         console.error(errorMsg);
                     }
                     running = false;
+                    const fullHistory = await this.chatSession.getHistory();
+                    await DbManager.saveChatHistory(fullHistory);
                 }
             } catch (error) {
                 console.error('An error occurred during the AI turn:', error);
@@ -418,6 +428,7 @@ export const GeminiChat = {
     async clearHistory(chatMessages) {
         chatMessages.innerHTML = '';
         UI.appendMessage(chatMessages, 'Conversation history cleared.', 'ai');
+        await DbManager.clearChatHistory();
         await this._startChat();
     },
 
