@@ -5,9 +5,9 @@ import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import * as FileSystem from './file_system.js';
 import { initializeEventListeners } from './events.js';
-import { GitManager } from './git_manager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
+
     // --- DOM Elements ---
     const editorContainer = document.getElementById('editor');
     const tabBarContainer = document.getElementById('tab-bar');
@@ -32,7 +32,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearImagePreview: null,
         handleFixErrors: null,
         handleImageUpload: null,
-        gitManager: null,
     };
 
     // --- Initialization ---
@@ -44,17 +43,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await Editor.openFile(fileHandle, filePath, tabBarContainer);
     };
 
-    async function initializeGit(directoryHandle) {
-        appState.gitManager = new GitManager(FileSystem.createFsAdapter(directoryHandle));
-        try {
-            await appState.gitManager.init();
-            console.log('Git repository initialized.');
-        } catch (e) {
-            // Ignore if it's already a git repository, or other init errors.
-            console.warn("Git init failed, could be expected:", e.message);
-        }
-        window.App.git = appState.gitManager; // For debugging
-    }
 
     async function tryRestoreDirectory() {
         const savedHandle = await DbManager.getDirectoryHandle();
@@ -67,7 +55,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             appState.rootDirectoryHandle = savedHandle;
             GeminiChat.rootDirectoryHandle = savedHandle;
             
-            await initializeGit(savedHandle);
 
             await UI.refreshFileTree(savedHandle, appState.onFileSelect);
 
@@ -175,7 +162,6 @@ Analyze the code and provide the necessary changes to resolve these issues.
             const handle = await window.showDirectoryPicker();
             appState.rootDirectoryHandle = handle;
             await DbManager.saveDirectoryHandle(handle);
-            await initializeGit(handle);
             await UI.refreshFileTree(handle, appState.onFileSelect);
             GeminiChat.rootDirectoryHandle = handle; // Update the handle
         } catch (error) {

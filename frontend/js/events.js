@@ -67,10 +67,8 @@ export function initializeEventListeners(appState) {
     const closeToolLogsModalButton = toolLogsModal.querySelector('.close-button');
     const undoButton = document.getElementById('undo-last-change-button');
     const filesTab = document.getElementById('files-tab');
-    const gitTab = document.getElementById('git-tab');
     const searchTab = document.getElementById('search-tab');
     const filesContent = document.getElementById('files-content');
-    const gitContent = document.getElementById('git-content');
     const searchContent = document.getElementById('search-content');
     const tasksTab = document.getElementById('tasks-tab');
     const tasksContent = document.getElementById('tasks-content');
@@ -81,8 +79,6 @@ export function initializeEventListeners(appState) {
     const searchCaseSensitive = document.getElementById('search-case-sensitive');
     const searchButton = document.getElementById('search-button');
     const searchResultsContainer = document.getElementById('search-results-container');
-    const commitMessageInput = document.getElementById('commit-message');
-    const commitButton = document.getElementById('commit-button');
 
 
     window.addEventListener('beforeunload', saveCurrentSession);
@@ -446,119 +442,29 @@ export function initializeEventListeners(appState) {
         GeminiChat.runToolDirectly('undo_last_change', {});
     });
 
-    if (filesTab && gitTab && searchTab && tasksTab && filesContent && gitContent && searchContent && tasksContent) {
+    if (filesTab && searchTab && tasksTab && filesContent && searchContent && tasksContent) {
         filesTab.addEventListener('click', () => {
             filesTab.classList.add('active');
-            gitTab.classList.remove('active');
             searchTab.classList.remove('active');
             tasksTab.classList.remove('active');
             filesContent.style.display = 'block';
-            gitContent.style.display = 'none';
             searchContent.style.display = 'none';
             tasksContent.style.display = 'none';
         });
     }
 
-    if (gitTab && filesTab && searchTab && tasksTab && gitContent && filesContent && searchContent && tasksContent) {
-        gitTab.addEventListener('click', () => {
-            gitTab.classList.add('active');
-            filesTab.classList.remove('active');
-            searchTab.classList.remove('active');
-            tasksTab.classList.remove('active');
-            gitContent.style.display = 'block';
-            filesContent.style.display = 'none';
-            searchContent.style.display = 'none';
-            tasksContent.style.display = 'none';
-            displayGitStatus(appState);
-        });
-    }
 
-    if (searchTab && filesTab && gitTab && tasksTab && searchContent && filesContent && gitContent && tasksContent) {
+    if (searchTab && filesTab && tasksTab && searchContent && filesContent && tasksContent) {
         searchTab.addEventListener('click', () => {
             searchTab.classList.add('active');
             filesTab.classList.remove('active');
-            gitTab.classList.remove('active');
             tasksTab.classList.remove('active');
             searchContent.style.display = 'block';
             filesContent.style.display = 'none';
-            gitContent.style.display = 'none';
             tasksContent.style.display = 'none';
         });
     }
 
-    if (tasksTab && filesTab && gitTab && searchTab && tasksContent && filesContent && gitContent && searchContent) {
-        tasksTab.addEventListener('click', () => {
-            tasksTab.classList.add('active');
-            filesTab.classList.remove('active');
-            gitTab.classList.remove('active');
-            searchTab.classList.remove('active');
-            tasksContent.style.display = 'block';
-            filesContent.style.display = 'none';
-            gitContent.style.display = 'none';
-            searchContent.style.display = 'none';
-        });
-    }
-
-    commitButton.addEventListener('click', async () => {
-        const message = commitMessageInput.value.trim();
-        if (!message) {
-            alert('Please enter a commit message.');
-            return;
-        }
-
-        try {
-            const sha = await appState.gitManager.commit(message, { name: 'User', email: 'user@example.com' });
-            alert(`Committed successfully: ${sha}`);
-            commitMessageInput.value = '';
-            displayGitStatus(appState);
-        } catch (error) {
-            alert(`Error committing: ${error.message}`);
-        }
-    });
-
-    async function displayGitStatus(appState) {
-        const gitStatusContainer = document.getElementById('git-status-container');
-        if (!appState.gitManager) {
-            gitStatusContainer.innerHTML = 'Git not initialized.';
-            return;
-        }
-
-        gitStatusContainer.innerHTML = 'Loading status...';
-
-        try {
-            const matrix = await appState.gitManager.statusMatrix();
-            let statusHTML = '<h4>Unstaged Changes</h4>';
-            const unstaged = matrix.filter(row => row[2] !== row[3]);
-            if (unstaged.length > 0) {
-                statusHTML += unstaged.map(row => `<div>${row[0]}</div>`).join('');
-                statusHTML += `<button id="stage-all-button">Stage All Changes</button>`;
-            } else {
-                statusHTML += '<div>No unstaged changes.</div>';
-            }
-            
-            statusHTML += '<h4>Staged Changes</h4>';
-            const staged = matrix.filter(row => row[1] !== row[2]);
-             if (staged.length > 0) {
-                statusHTML += staged.map(row => `<div>${row[0]}</div>`).join('');
-            } else {
-                statusHTML += '<div>No staged changes.</div>';
-            }
-
-            gitStatusContainer.innerHTML = statusHTML;
-
-            const stageAllButton = document.getElementById('stage-all-button');
-            if (stageAllButton) {
-                stageAllButton.addEventListener('click', async () => {
-                    for (const row of unstaged) {
-                        await appState.gitManager.add(row[0]);
-                    }
-                    displayGitStatus(appState);
-                });
-            }
-        } catch (error) {
-            gitStatusContainer.innerHTML = `Error getting status: ${error.message}`;
-        }
-    }
     searchButton.addEventListener('click', () => handleSearch(appState));
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -618,15 +524,13 @@ export function initializeEventListeners(appState) {
             });
         });
     }
-    if (tasksTab && filesTab && gitTab && searchTab && tasksContent && filesContent && gitContent && searchContent) {
+    if (tasksTab && filesTab && searchTab && tasksContent && filesContent && searchContent) {
         tasksTab.addEventListener('click', async () => {
             tasksTab.classList.add('active');
             filesTab.classList.remove('active');
-            gitTab.classList.remove('active');
             searchTab.classList.remove('active');
             tasksContent.style.display = 'block';
             filesContent.style.display = 'none';
-            gitContent.style.display = 'none';
             searchContent.style.display = 'none';
             await displayTasks(appState);
         });

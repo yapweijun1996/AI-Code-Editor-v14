@@ -16,9 +16,6 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css"
     />
-    <!-- Isomorphic Git -->
-    <script src="https://unpkg.com/isomorphic-git@1.25.3/index.umd.js"></script>
-    <script src="https://unpkg.com/isomorphic-git@1.25.3/http/web/index.umd.js"></script>
   </head>
   <body>
     <div id="error-container"></div>
@@ -26,7 +23,6 @@
       <div id="file-tree-container" class="sidebar">
         <div class="sidebar-tabs">
             <div class="sidebar-tab active" id="files-tab">Files</div>
-            <div class="sidebar-tab" id="git-tab">Git</div>
             <div class="sidebar-tab" id="search-tab">Search</div>
             <div class="sidebar-tab" id="tasks-tab">Tasks</div>
         </div>
@@ -39,21 +35,16 @@
             </div>
             <div id="file-tree"></div>
         </div>
-        <div class="sidebar-content" id="git-content" style="display: none;">
-            <h3>Git Status</h3>
-            <div id="git-status-container"></div>
-            <h3>Commit</h3>
-            <textarea id="commit-message" placeholder="Commit message"></textarea>
-            <button id="commit-button">Commit</button>
-        </div>
         <div class="sidebar-content" id="search-content" style="display: none;">
             <h3>Search in Files</h3>
-            <input type="text" id="search-input" placeholder="Search">
-            <div class="search-options">
-                <label><input type="checkbox" id="search-regex"> Regex</label>
-                <label><input type="checkbox" id="search-case-sensitive"> Case Sensitive</label>
+            <div class="search-panel">
+                <input class="search-input" type="text" id="search-input" placeholder="Search in files...">
+                <div class="search-options">
+                    <label><input type="checkbox" id="search-regex"> Regex</label>
+                    <label><input type="checkbox" id="search-case-sensitive"> Case Sensitive</label>
+                </div>
+                <button class="search-button" id="search-button">Search</button>
             </div>
-            <button id="search-button">Search</button>
             <div id="search-results-container"></div>
         </div>
         <div class="sidebar-content" id="tasks-content" style="display: none;">
