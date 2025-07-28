@@ -32,6 +32,11 @@ The editor's architecture has been streamlined to use a local Node.js server, si
     *   **Stateful UI**: The file tree and open tabs are rendered dynamically, providing a clear and consistent view of the project state.
 *   **Automatic File Opening**: When the AI agent reads, creates, or rewrites a file, it is automatically opened or focused, providing immediate visibility into the agent's actions.
 *   **AST-Powered Code Analysis**: The AI can use the `analyze_code` tool to parse JavaScript code into an Abstract Syntax Tree (AST), enabling a deep, structural understanding of the code for more precise refactoring and analysis.
+*   **Efficient File Modifications**: The AI has access to multiple tools for file modifications, allowing it to choose the most efficient method for each task:
+    *   **`rewrite_file`**: Replaces the entire content of a file, ideal for large-scale changes.
+    *   **`insert_content`**: Inserts content at a specific line number, perfect for adding new functions or blocks of code.
+    *   **`apply_diff`**: Applies a patch to a file, enabling efficient, targeted changes.
+    *   **`replace_selected_text`**: Replaces only the currently selected text, offering a highly performant option for iterative refactoring.
 *   **Multimodal Input**: The AI chat supports both text and image uploads, allowing you to ask questions about visual content.
 *   **Multiple Agent Modes**: Switch between different AI modes (`Code`, `Plan`, `Search`) to tailor the agent's behavior to your specific needs.
 *   **Persistent Model Selection**: The application remembers your chosen AI model across sessions, saving you from having to re-select it on every visit.

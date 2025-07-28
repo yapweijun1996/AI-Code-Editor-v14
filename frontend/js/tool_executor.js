@@ -160,6 +160,93 @@ async function _insertContent({ filename, line_number, content }, rootHandle) {
     return { message: `Content inserted into '${filename}' at line ${line_number}.` };
 }
 
+async function _applyDiff({ filename, patch_content }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required for apply_diff.");
+    if (!patch_content) throw new Error("The 'patch_content' parameter is required for apply_diff.");
+
+    const dmp = new diff_match_patch();
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+    const file = await fileHandle.getFile();
+    const originalContent = await file.text();
+    
+    let patchText = patch_content;
+    if (typeof patch_content !== 'string') {
+        patchText = String(patch_content);
+    }
+    
+    const patches = dmp.patch_fromText(patchText);
+    const [newContent, results] = dmp.patch_apply(patches, originalContent);
+
+    if (results.some(r => !r)) {
+        throw new Error(`Failed to apply patch to '${filename}'. The patch may not be valid.`);
+    }
+
+    const writable = await fileHandle.createWritable();
+    await writable.write(newContent);
+    await writable.close();
+
+    if (Editor.getOpenFiles().has(filename)) {
+        Editor.getOpenFiles().get(filename)?.model.setValue(newContent);
+    }
+    await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
+    document.getElementById('chat-input').focus();
+    return { message: `Patch applied to '${filename}' successfully.` };
+}
+
+async function _createDiff({ original_content, new_content }) {
+    if (original_content === undefined) throw new Error("The 'original_content' parameter is required for create_diff.");
+    if (new_content === undefined) throw new Error("The 'new_content' parameter is required for create_diff.");
+
+    const dmp = new diff_match_patch();
+    const a = dmp.diff_linesToChars_(original_content, new_content);
+    const lineText1 = a.chars1;
+    const lineText2 = a.chars2;
+    const lineArray = a.lineArray;
+    const diffs = dmp.diff_main(lineText1, lineText2, false);
+    dmp.diff_charsToLines_(diffs, lineArray);
+    const patches = dmp.patch_make(original_content, diffs);
+    const patchText = dmp.patch_toText(patches);
+
+    return { patch_content: patchText };
+}
+
+async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required for create_and_apply_diff.");
+    if (new_content === undefined) throw new Error("The 'new_content' parameter is required for create_and_apply_diff.");
+
+    const dmp = new diff_match_patch();
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+    const file = await fileHandle.getFile();
+    const originalContent = await file.text();
+    const cleanNewContent = stripMarkdownCodeBlock(new_content);
+
+    // Use a line-based diff to avoid stack overflow on large files.
+    const a = dmp.diff_linesToChars_(originalContent, cleanNewContent);
+    const lineText1 = a.chars1;
+    const lineText2 = a.chars2;
+    const lineArray = a.lineArray;
+    const diffs = dmp.diff_main(lineText1, lineText2, false);
+    dmp.diff_charsToLines_(diffs, lineArray);
+
+    const patches = dmp.patch_make(originalContent, diffs);
+    const [patchedContent, results] = dmp.patch_apply(patches, originalContent);
+
+    if (results.some(r => !r)) {
+        throw new Error(`Failed to apply patch to '${filename}'. The patch may not be valid.`);
+    }
+
+    const writable = await fileHandle.createWritable();
+    await writable.write(patchedContent);
+    await writable.close();
+
+    if (Editor.getOpenFiles().has(filename)) {
+        Editor.getOpenFiles().get(filename)?.model.setValue(patchedContent);
+    }
+    await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
+    document.getElementById('chat-input').focus();
+    return { message: `Patch applied to '${filename}' successfully.` };
+}
+
 async function _createFolder({ folder_path }, rootHandle) {
     if (!folder_path) throw new Error("The 'folder_path' parameter is required for create_folder.");
     await FileSystem.createDirectoryFromPath(rootHandle, folder_path);
@@ -361,6 +448,8 @@ const toolRegistry = {
     delete_file: { handler: _deleteFile, requiresProject: true, createsCheckpoint: true },
     rename_file: { handler: _renameFile, requiresProject: true, createsCheckpoint: true },
     insert_content: { handler: _insertContent, requiresProject: true, createsCheckpoint: true },
+    apply_diff: { handler: _applyDiff, requiresProject: true, createsCheckpoint: true },
+    create_and_apply_diff: { handler: _createAndApplyDiff, requiresProject: true, createsCheckpoint: true },
     create_folder: { handler: _createFolder, requiresProject: true, createsCheckpoint: true },
     delete_folder: { handler: _deleteFolder, requiresProject: true, createsCheckpoint: true },
     rename_folder: { handler: _renameFolder, requiresProject: true, createsCheckpoint: true },
@@ -371,6 +460,7 @@ const toolRegistry = {
     get_open_file_content: { handler: _getOpenFileContent, requiresProject: false, createsCheckpoint: false },
     get_selected_text: { handler: _getSelectedText, requiresProject: false, createsCheckpoint: false },
     replace_selected_text: { handler: _replaceSelectedText, requiresProject: false, createsCheckpoint: false },
+    create_diff: { handler: _createDiff, requiresProject: false, createsCheckpoint: false },
 };
 
 // --- Core Execution Logic ---
@@ -410,7 +500,7 @@ async function executeTool(toolCall, rootDirectoryHandle) {
     return tool.handler(parameters, rootDirectoryHandle);
 }
 
-const TOOLS_REQUIRING_SYNTAX_CHECK = ['rewrite_file', 'insert_content', 'replace_selected_text'];
+const TOOLS_REQUIRING_SYNTAX_CHECK = ['rewrite_file', 'insert_content', 'replace_selected_text', 'apply_diff'];
 
 export async function execute(toolCall, rootDirectoryHandle) {
     const toolName = toolCall.name;

@@ -74,6 +74,8 @@ export const GeminiChat = {
                     { name: 'query_codebase', description: 'Searches the pre-built codebase index.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
                     { name: 'get_file_history', description: "Gets a file's git history. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
                     { name: 'rewrite_file', description: "Rewrites a file with new content. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, content: { type: 'STRING', description: 'The new, raw text content of the file. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'content'] } },
+                    { name: 'insert_content', description: "Inserts content at a specific line number in a file. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, line_number: { type: 'NUMBER' }, content: { type: 'STRING', description: 'The raw text content to insert. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'line_number', 'content'] } },
+                    { name: 'create_and_apply_diff', description: "Efficiently modifies a file by generating and applying a diff in a single step.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, new_content: { type: 'STRING', description: 'The new, raw text content of the file. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'new_content'] } },
                     { name: 'format_code', description: "Formats a file with Prettier. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
                     { name: 'analyze_code', description: "Analyzes a JavaScript file's structure. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
                 ],
@@ -110,13 +112,18 @@ export const GeminiChat = {
 - **Contextual Awareness:** When a user gives a follow-up command like "read all of them" or "go into more detail," you MUST refer to the immediate preceding turns in the conversation to understand what "them" refers to. Use the URLs or file paths you provided in your last response as the context for the new command.
 - When a task requires multiple steps, you MUST use the output of the previous step as the input for the current step. For example, after using 'get_project_structure', use the list of files as input for your 'read_file' calls. Do not discard context.
 
-**4. POST-TOOL ANALYSIS:**
+**4. EFFICIENT FILE MODIFICATION:**
+- **For large files, prefer \`create_and_apply_diff\` or \`insert_content\` over \`rewrite_file\`**.
+- **To modify a file**, first read it, then call \`create_and_apply_diff\` with the filename and the full new content.
+- **For highly targeted changes**, ask the user to select the text in the editor. Then use \`get_selected_text\` and \`replace_selected_text\` to modify only that selection.
+
+**5. POST-TOOL ANALYSIS:**
 - After a tool executes, you MUST provide a thoughtful, analytical response.
 - **Summarize:** Briefly explain the outcome of the tool command.
 - **Analyze:** Explain what the result means in the context of your plan.
 - **Next Action:** State what you will do next and then call the appropriate tool.
 
-**5. URL HANDLING & RESEARCH:**
+**6. URL HANDLING & RESEARCH:**
 - **URL Construction Rule:** When you discover relative URLs (e.g., '/path/to/page'), you MUST convert them to absolute URLs by correctly combining them with the base URL of the source page. CRITICAL: Ensure you do not introduce errors like double slashes ('//') or invalid characters ('.com./').
 - **Autonomous Deep Dive:** When you read a URL and it contains more links, you must autonomously select the single most relevant link to continue the research. State your choice and proceed when commanded. Do not ask the user which link to choose.
 - **CRITICAL: Proactive URL Reading from Search:** After a \`duckduckgo_search\`, you MUST analyze the search results. If a result appears relevant, you MUST immediately and proactively use the \`read_url\` tool on that URL to gather more details. This is not optional. Do not ask for permission.
