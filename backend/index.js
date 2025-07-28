@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const os = require('os');
-const pty = require('node-pty');
+const { exec } = require('child_process');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { URL } = require('url');
@@ -173,78 +173,72 @@ app.post('/api/duckduckgo-search', async (req, res) => {
 app.post('/api/execute-tool', async (req, res) => {
   const { toolName, parameters } = req.body;
 
-  if (toolName !== 'run_terminal_command') {
-    return res
-      .status(501)
-      .json({
+  const validBackendTools = ['run_terminal_command', 'get_file_history'];
+  if (!validBackendTools.includes(toolName)) {
+    return res.status(501).json({
+      status: 'Error',
+      message: `Tool '${toolName}' is not a valid backend tool.`,
+    });
+  }
+
+  let command;
+  if (toolName === 'get_file_history') {
+    if (!parameters.filename) {
+        return res.status(400).json({ status: 'Error', message: "A 'filename' parameter is required for get_file_history." });
+    }
+    // Sanitize filename to prevent command injection
+    const sanitizedFilename = JSON.stringify(parameters.filename);
+    command = `git log --pretty=format:'%H|%an|%ad|%s' -- ${sanitizedFilename}`;
+  } else { // run_terminal_command
+    if (!parameters.command) {
+        return res.status(400).json({ status: 'Error', message: "A 'command' parameter is required for run_terminal_command." });
+    }
+    command = parameters.command;
+  }
+
+  const isWindows = os.platform() === 'win32';
+  
+  // Set the working directory to the project root, which is one level above the backend directory.
+  // This ensures commands like 'git' execute in the correct context.
+  const executionCwd = path.join(__dirname, '..');
+
+  // Create a robust environment, ensuring a sane PATH for command execution.
+  const executionEnv = {
+    ...process.env,
+    PATH: isWindows
+      ? process.env.PATH
+      : `${process.env.PATH}:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin`,
+  };
+
+  const execOptions = {
+    cwd: executionCwd,
+    env: executionEnv,
+    shell: isWindows ? 'powershell.exe' : '/bin/bash',
+  };
+
+  console.log(`[BACKEND] Executing command: '${command}' in '${execOptions.cwd}'`);
+
+  const shellCommand = isWindows
+    ? `powershell.exe -Command "& {${command}}"`
+    : `/bin/bash -c "${command.replace(/"/g, '\\"')}"`;
+
+  exec(shellCommand, execOptions, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`[BACKEND] Execution error: ${error.message}`);
+      return res.status(500).json({
         status: 'Error',
-        message: `Tool '${toolName}' is not implemented on the backend.`,
+        message: `Command failed with exit code ${error.code}.`,
+        output: `stdout: ${stdout}\nstderr: ${stderr}`,
       });
-  }
-
-  const { command, cwd } = parameters;
-  if (!command) {
-    return res
-      .status(400)
-      .json({ status: 'Error', message: "A 'command' parameter is required." });
-  }
-
-  // Determine the shell based on the operating system
-  const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-  const ptyProcess = pty.spawn(shell, [], {
-    name: 'xterm-color',
-    cols: 80,
-    rows: 30,
-    cwd: cwd || process.env.HOME, // Use provided cwd or fallback to home directory
-    env: process.env,
-  });
-
-  let output = '';
-  ptyProcess.onData((data) => {
-    output += data;
-    console.log('[TERMINAL]', data);
-  });
-
-  ptyProcess.onExit(({ exitCode, signal }) => {
-    console.log(`[TERMINAL] Process exited with code ${exitCode}`);
-    if (exitCode === 0) {
-      res.json({ status: 'Success', output: output });
-    } else {
-      res
-        .status(500)
-        .json({
-          status: 'Error',
-          message: `Command failed with exit code ${exitCode}.`,
-          output: output,
-        });
     }
+
+    console.log(`[TERMINAL] stdout: ${stdout}`);
+    if (stderr) {
+      console.warn(`[TERMINAL] stderr: ${stderr}`);
+    }
+
+    res.json({ status: 'Success', output: stdout });
   });
-
-  console.log(`[BACKEND] Executing command: ${command}`);
-  ptyProcess.write(command + '\r');
-
-  // Add a small delay and then send an exit command to ensure the process terminates
-  // if the executed command is non-interactive.
-  setTimeout(() => {
-    if (!ptyProcess.killed) {
-      ptyProcess.write('exit\r');
-    }
-  }, 1000); // Wait 1 second before exiting
-
-  // Timeout to prevent hanging processes
-  setTimeout(() => {
-    if (!res.headersSent) {
-      ptyProcess.kill();
-      console.error('[BACKEND] Command timed out.');
-      res
-        .status(500)
-        .json({
-          status: 'Error',
-          message: 'Command execution timed out.',
-          output: output,
-        });
-    }
-  }, 15000); // 15-second timeout
 });
 
 app.listen(port, () => {

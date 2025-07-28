@@ -357,8 +357,12 @@ export const GeminiChat = {
                         UI.appendMessage(chatMessages, fullResponseText, 'ai', true);
                     }
                     const chunkFunctionCalls = chunk.functionCalls();
-                    if (chunkFunctionCalls) {
-                        functionCalls.push(...chunkFunctionCalls);
+                    if (chunkFunctionCalls && chunkFunctionCalls.length > 0) {
+                        // Basic validation to prevent malformed data from crashing the stream parser
+                        const hasValidCall = chunkFunctionCalls.some(call => call && call.name && typeof call.name === 'string');
+                        if (hasValidCall) {
+                            functionCalls.push(...chunkFunctionCalls);
+                        }
                     }
                 }
 

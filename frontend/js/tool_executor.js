@@ -160,6 +160,7 @@ async function _createFile({ filename, content }, rootHandle) {
    const writable = await fileHandle.createWritable();
    await writable.write(cleanContent);
    await writable.close();
+    await new Promise(resolve => setTimeout(resolve, 100)); // Mitigate race condition
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
         Editor.openFile(fileHandle, filePath, document.getElementById('tab-bar'));
@@ -191,6 +192,7 @@ async function _deleteFile({ filename }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for delete_file.");
     const { parentHandle, entryName } = await FileSystem.getParentDirectoryHandle(rootHandle, filename);
     await parentHandle.removeEntry(entryName);
+    await new Promise(resolve => setTimeout(resolve, 100)); // Mitigate race condition
     if (Editor.getOpenFiles().has(filename)) {
         Editor.closeTab(filename, document.getElementById('tab-bar'));
     }
@@ -204,6 +206,7 @@ async function _deleteFile({ filename }, rootHandle) {
 async function _renameFile({ old_path, new_path }, rootHandle) {
     if (!old_path || !new_path) throw new Error("The 'old_path' and 'new_path' parameters are required for rename_file.");
     await FileSystem.renameEntry(rootHandle, old_path, new_path);
+    await new Promise(resolve => setTimeout(resolve, 100)); // Mitigate race condition
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
         Editor.openFile(fileHandle, filePath, document.getElementById('tab-bar'));
@@ -398,6 +401,7 @@ async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
 async function _createFolder({ folder_path }, rootHandle) {
     if (!folder_path) throw new Error("The 'folder_path' parameter is required for create_folder.");
     await FileSystem.createDirectoryFromPath(rootHandle, folder_path);
+    await new Promise(resolve => setTimeout(resolve, 100)); // Mitigate race condition
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
         Editor.openFile(fileHandle, filePath, document.getElementById('tab-bar'));
@@ -409,6 +413,7 @@ async function _deleteFolder({ folder_path }, rootHandle) {
     if (!folder_path) throw new Error("The 'folder_path' parameter is required for delete_folder.");
     const { parentHandle, entryName } = await FileSystem.getParentDirectoryHandle(rootHandle, folder_path);
     await parentHandle.removeEntry(entryName, { recursive: true });
+    await new Promise(resolve => setTimeout(resolve, 100)); // Mitigate race condition
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
         Editor.openFile(fileHandle, filePath, document.getElementById('tab-bar'));
@@ -419,6 +424,7 @@ async function _deleteFolder({ folder_path }, rootHandle) {
 async function _renameFolder({ old_folder_path, new_folder_path }, rootHandle) {
     if (!old_folder_path || !new_folder_path) throw new Error("The 'old_folder_path' and 'new_folder_path' parameters are required for rename_folder.");
     await FileSystem.renameEntry(rootHandle, old_folder_path, new_folder_path);
+    await new Promise(resolve => setTimeout(resolve, 100)); // Mitigate race condition
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
         Editor.openFile(fileHandle, filePath, document.getElementById('tab-bar'));

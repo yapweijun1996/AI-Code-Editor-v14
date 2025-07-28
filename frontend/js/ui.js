@@ -1,4 +1,4 @@
-import { buildTree } from './file_system.js';
+import { buildTree, getIgnorePatterns } from './file_system.js';
 
 export function initResizablePanels(editor) {
     window.splitInstance = Split(['#file-tree-container', '#editor-container', '#chat-panel'], {
@@ -55,7 +55,8 @@ export async function refreshFileTree(rootDirectoryHandle, onFileSelect) {
             treeInstance.destroy();
         }
 
-        const treeData = await buildTree(rootDirectoryHandle);
+        const ignorePatterns = await getIgnorePatterns(rootDirectoryHandle);
+        const treeData = await buildTree(rootDirectoryHandle, ignorePatterns);
         renderTree(treeData, onFileSelect);
 
         updateDirectoryButtons(true);
