@@ -81,6 +81,9 @@ async function _createFile({ filename, content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for create_file.");
    const cleanContent = stripMarkdownCodeBlock(content);
    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
+    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
+        throw new Error('Permission to write to the file was denied.');
+    }
    const writable = await fileHandle.createWritable();
    await writable.write(cleanContent);
    await writable.close();
@@ -97,6 +100,9 @@ async function _rewriteFile({ filename, content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for rewrite_file.");
    const cleanContent = stripMarkdownCodeBlock(content);
    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
+        throw new Error('Permission to write to the file was denied.');
+    }
    const writable = await fileHandle.createWritable();
    await writable.write(cleanContent);
    await writable.close();
@@ -149,9 +155,12 @@ async function _insertContent({ filename, line_number, content }, rootHandle) {
    const insertionPoint = Math.max(0, line_number - 1);
    lines.splice(insertionPoint, 0, cleanContent);
    const newContent = lines.join('\n');
+    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
+        throw new Error('Permission to write to the file was denied.');
+    }
     const writable = await fileHandle.createWritable();
-    await writable.write(newContent);
-    await writable.close();
+     await writable.write(newContent);
+     await writable.close();
     if (Editor.getOpenFiles().has(filename)) {
         Editor.getOpenFiles().get(filename)?.model.setValue(newContent);
     }
@@ -181,6 +190,9 @@ async function _applyDiff({ filename, patch_content }, rootHandle) {
         throw new Error(`Failed to apply patch to '${filename}'. The patch may not be valid.`);
     }
 
+    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
+        throw new Error('Permission to write to the file was denied.');
+    }
     const writable = await fileHandle.createWritable();
     await writable.write(newContent);
     await writable.close();
@@ -235,6 +247,9 @@ async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
         throw new Error(`Failed to apply patch to '${filename}'. The patch may not be valid.`);
     }
 
+    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
+        throw new Error('Permission to write to the file was denied.');
+    }
     const writable = await fileHandle.createWritable();
     await writable.write(patchedContent);
     await writable.close();

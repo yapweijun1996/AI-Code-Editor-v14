@@ -188,3 +188,14 @@ export const buildTree = async (dirHandle, currentPath = '') => {
     });
     return children;
 };
+export async function verifyAndRequestPermission(fileHandle, withWrite = false) {
+    const options = { mode: withWrite ? 'readwrite' : 'read' };
+    if (await fileHandle.queryPermission(options) === 'granted') {
+        return true;
+    }
+    if (await fileHandle.requestPermission(options) === 'granted') {
+        return true;
+    }
+    // The user didn't grant permission, so we can't proceed.
+    return false;
+}
