@@ -30,7 +30,7 @@ async function _readFile({ filename }, rootHandle) {
     const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
     const file = await fileHandle.getFile();
 
-    const MAX_CONTEXT_BYTES = 100000; // 100KB threshold
+    const MAX_CONTEXT_BYTES = 256000; // 256KB threshold
 
     await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
     document.getElementById('chat-input').focus();
@@ -117,7 +117,7 @@ async function _readMultipleFiles({ filenames }, rootHandle) {
         throw new Error("The 'filenames' parameter is required and must be a non-empty array of strings.");
     }
 
-    const MAX_CONTEXT_BYTES = 100000; // 100KB threshold per file
+    const MAX_CONTEXT_BYTES = 256000; // 256KB threshold per file
     let combinedContent = '';
 
     for (const filename of filenames) {
