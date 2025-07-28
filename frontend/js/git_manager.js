@@ -3,7 +3,7 @@
 class GitManager {
   constructor(fs) {
     this.fs = fs;
-    this.git = window.isomorphicGit;
+    this.git = window.git;
     this.http = window.isomorphicGitHttp;
     this.dir = '/';
   }

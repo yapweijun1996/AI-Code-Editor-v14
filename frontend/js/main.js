@@ -44,6 +44,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         await Editor.openFile(fileHandle, filePath, tabBarContainer);
     };
 
+    async function initializeGit(directoryHandle) {
+        appState.gitManager = GitManager;
+        appState.gitManager.fs = FileSystem.createFsAdapter(directoryHandle);
+        appState.gitManager.git = window.git; // Ensure git is assigned before use
+        try {
+            await appState.gitManager.init();
+            console.log('Git repository initialized.');
+        } catch (e) {
+            // Ignore if it's already a git repository, or other init errors.
+            console.warn("Git init failed, could be expected:", e.message);
+        }
+        window.App.git = appState.gitManager; // For debugging
+    }
+
     async function tryRestoreDirectory() {
         const savedHandle = await DbManager.getDirectoryHandle();
         if (!savedHandle) {
@@ -55,16 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             appState.rootDirectoryHandle = savedHandle;
             GeminiChat.rootDirectoryHandle = savedHandle;
             
-            // Initialize GitManager with the file system
-            appState.gitManager = GitManager;
-            appState.gitManager.fs = FileSystem.createFsAdapter(savedHandle);
-            try {
-                await appState.gitManager.init();
-                console.log('Git repository initialized.');
-            } catch (e) {
-                // Ignore if it's already a git repository
-            }
-            window.App.git = appState.gitManager; // For debugging
+            await initializeGit(savedHandle);
 
             await UI.refreshFileTree(savedHandle, appState.onFileSelect);
 
@@ -165,6 +170,20 @@ Analyze the code and provide the necessary changes to resolve these issues.
         GeminiChat.resetErrorTracker();
         GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
     };
+
+    const openDirectoryButton = document.getElementById('open-directory-button');
+    openDirectoryButton.addEventListener('click', async () => {
+        try {
+            const handle = await window.showDirectoryPicker();
+            appState.rootDirectoryHandle = handle;
+            await DbManager.saveDirectoryHandle(handle);
+            await initializeGit(handle);
+            await UI.refreshFileTree(handle, appState.onFileSelect);
+            GeminiChat.rootDirectoryHandle = handle; // Update the handle
+        } catch (error) {
+            console.error('Error opening directory:', error);
+        }
+    });
 
     initializeEventListeners(appState);
 

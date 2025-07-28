@@ -69,7 +69,7 @@ export function initializeEventListeners(appState) {
     const filesTab = document.getElementById('files-tab');
     const gitTab = document.getElementById('git-tab');
     const searchTab = document.getElementById('search-tab');
-    const filesContent = document.getElementById('file-tree-container');
+    const filesContent = document.getElementById('files-content');
     const gitContent = document.getElementById('git-content');
     const searchContent = document.getElementById('search-content');
     const tasksTab = document.getElementById('tasks-tab');
@@ -446,50 +446,58 @@ export function initializeEventListeners(appState) {
         GeminiChat.runToolDirectly('undo_last_change', {});
     });
 
-    filesTab.addEventListener('click', () => {
-        filesTab.classList.add('active');
-        gitTab.classList.remove('active');
-        searchTab.classList.remove('active');
-        tasksTab.classList.remove('active');
-        filesContent.style.display = 'block';
-        gitContent.style.display = 'none';
-        searchContent.style.display = 'none';
-        tasksContent.style.display = 'none';
-    });
+    if (filesTab && gitTab && searchTab && tasksTab && filesContent && gitContent && searchContent && tasksContent) {
+        filesTab.addEventListener('click', () => {
+            filesTab.classList.add('active');
+            gitTab.classList.remove('active');
+            searchTab.classList.remove('active');
+            tasksTab.classList.remove('active');
+            filesContent.style.display = 'block';
+            gitContent.style.display = 'none';
+            searchContent.style.display = 'none';
+            tasksContent.style.display = 'none';
+        });
+    }
 
-    gitTab.addEventListener('click', () => {
-        gitTab.classList.add('active');
-        filesTab.classList.remove('active');
-        searchTab.classList.remove('active');
-        tasksTab.classList.remove('active');
-        gitContent.style.display = 'block';
-        filesContent.style.display = 'none';
-        searchContent.style.display = 'none';
-        tasksContent.style.display = 'none';
-        displayGitStatus(appState);
-    });
+    if (gitTab && filesTab && searchTab && tasksTab && gitContent && filesContent && searchContent && tasksContent) {
+        gitTab.addEventListener('click', () => {
+            gitTab.classList.add('active');
+            filesTab.classList.remove('active');
+            searchTab.classList.remove('active');
+            tasksTab.classList.remove('active');
+            gitContent.style.display = 'block';
+            filesContent.style.display = 'none';
+            searchContent.style.display = 'none';
+            tasksContent.style.display = 'none';
+            displayGitStatus(appState);
+        });
+    }
 
-    searchTab.addEventListener('click', () => {
-        searchTab.classList.add('active');
-        filesTab.classList.remove('active');
-        gitTab.classList.remove('active');
-        tasksTab.classList.remove('active');
-        searchContent.style.display = 'block';
-        filesContent.style.display = 'none';
-        gitContent.style.display = 'none';
-        tasksContent.style.display = 'none';
-    });
+    if (searchTab && filesTab && gitTab && tasksTab && searchContent && filesContent && gitContent && tasksContent) {
+        searchTab.addEventListener('click', () => {
+            searchTab.classList.add('active');
+            filesTab.classList.remove('active');
+            gitTab.classList.remove('active');
+            tasksTab.classList.remove('active');
+            searchContent.style.display = 'block';
+            filesContent.style.display = 'none';
+            gitContent.style.display = 'none';
+            tasksContent.style.display = 'none';
+        });
+    }
 
-    tasksTab.addEventListener('click', () => {
-        tasksTab.classList.add('active');
-        filesTab.classList.remove('active');
-        gitTab.classList.remove('active');
-        searchTab.classList.remove('active');
-        tasksContent.style.display = 'block';
-        filesContent.style.display = 'none';
-        gitContent.style.display = 'none';
-        searchContent.style.display = 'none';
-    });
+    if (tasksTab && filesTab && gitTab && searchTab && tasksContent && filesContent && gitContent && searchContent) {
+        tasksTab.addEventListener('click', () => {
+            tasksTab.classList.add('active');
+            filesTab.classList.remove('active');
+            gitTab.classList.remove('active');
+            searchTab.classList.remove('active');
+            tasksContent.style.display = 'block';
+            filesContent.style.display = 'none';
+            gitContent.style.display = 'none';
+            searchContent.style.display = 'none';
+        });
+    }
 
     commitButton.addEventListener('click', async () => {
         const message = commitMessageInput.value.trim();
@@ -610,17 +618,19 @@ export function initializeEventListeners(appState) {
             });
         });
     }
-    tasksTab.addEventListener('click', async () => {
-        tasksTab.classList.add('active');
-        filesTab.classList.remove('active');
-        gitTab.classList.remove('active');
-        searchTab.classList.remove('active');
-        tasksContent.style.display = 'block';
-        filesContent.style.display = 'none';
-        gitContent.style.display = 'none';
-        searchContent.style.display = 'none';
-        await displayTasks(appState);
-    });
+    if (tasksTab && filesTab && gitTab && searchTab && tasksContent && filesContent && gitContent && searchContent) {
+        tasksTab.addEventListener('click', async () => {
+            tasksTab.classList.add('active');
+            filesTab.classList.remove('active');
+            gitTab.classList.remove('active');
+            searchTab.classList.remove('active');
+            tasksContent.style.display = 'block';
+            filesContent.style.display = 'none';
+            gitContent.style.display = 'none';
+            searchContent.style.display = 'none';
+            await displayTasks(appState);
+        });
+    }
 
     async function displayTasks(appState) {
         const tasks = await TaskRunner.discoverTasks(appState.rootDirectoryHandle);
