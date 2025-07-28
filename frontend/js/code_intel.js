@@ -3,7 +3,9 @@
 // =================================================================
 export const CodebaseIndexer = {
     async buildIndex(dirHandle, options = {}) {
-        const { lastIndexTimestamp = 0, existingIndex = { files: {} } } = options;
+        const opts = options || {};
+        const { lastIndexTimestamp = 0 } = opts;
+        const existingIndex = opts.existingIndex || { files: {} };
         const stats = { indexedFileCount: 0, skippedFileCount: 0, deletedFileCount: 0 };
         const allFilePathsInProject = new Set();
 

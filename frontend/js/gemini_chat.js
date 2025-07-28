@@ -374,8 +374,13 @@ export const GeminiChat = {
                 UI.updateTokenDisplay(requestTokenResult.totalTokens, responseTokenResult.totalTokens);
 
                 if (functionCalls.length > 0) {
-                    const toolPromises = functionCalls.map((call) => ToolExecutor.execute(call, this.rootDirectoryHandle));
-                    const toolResults = await Promise.all(toolPromises);
+                    const toolResults = [];
+                    for (const call of functionCalls) {
+                        if (this.isCancelled) break;
+                        const result = await ToolExecutor.execute(call, this.rootDirectoryHandle);
+                        toolResults.push(result);
+                    }
+                    if (this.isCancelled) break;
                     promptParts = toolResults.map((toolResult) => {
                         return {
                             functionResponse: {

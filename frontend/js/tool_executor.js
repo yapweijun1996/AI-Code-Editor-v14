@@ -496,7 +496,7 @@ async function _runTerminalCommand(parameters, rootHandle) {
         });
         return { output: terminalResult.output };
     } else {
-        throw new Error(terminalResult.message);
+        throw new Error(`Command failed. This is likely a backend issue. Please check the server logs. Raw message: ${terminalResult.message}`);
     }
 }
 
@@ -512,7 +512,7 @@ async function _getFileHistory({ filename }, rootHandle) {
     if (terminalResult.status === 'Success') {
         return { history: terminalResult.output };
     } else {
-        throw new Error(terminalResult.message);
+        throw new Error(`Fetching file history failed. This is likely a backend issue with 'git'. Please check the server logs. Raw message: ${terminalResult.message}`);
     }
 }
 
