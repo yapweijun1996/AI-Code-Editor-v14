@@ -211,23 +211,43 @@ app.post('/api/execute-tool', async (req, res) => {
   };
 
   const execOptions = {
-    cwd: executionCwd,
+    // The 'cwd' option can be unreliable with explicit shell invocation.
+    // Instead, we'll 'cd' as part of the command itself.
     env: executionEnv,
     shell: isWindows ? 'powershell.exe' : '/bin/bash',
   };
 
-  console.log(`[BACKEND] Executing command: '${command}' in '${execOptions.cwd}'`);
+  // Force execution in the project root by prepending 'cd' to the command.
+  const finalCommand = isWindows
+    ? `cd "${executionCwd}"; ${command}`
+    : `cd "${executionCwd}" && ${command}`;
 
+  console.log(`[BACKEND] Executing command: '${finalCommand}' in '${executionCwd}'`);
+
+  // The command is now wrapped to ensure it runs in the correct directory.
   const shellCommand = isWindows
-    ? `powershell.exe -Command "& {${command}}"`
-    : `/bin/bash -c "${command.replace(/"/g, '\\"')}"`;
+    ? `powershell.exe -Command "& {${finalCommand}}"`
+    : `/bin/bash -c "${finalCommand.replace(/"/g, '\\"')}"`;
 
   exec(shellCommand, execOptions, (error, stdout, stderr) => {
     if (error) {
-      console.error(`[BACKEND] Execution error: ${error.message}`);
+      console.error(`[BACKEND] Execution error for '${toolName}': ${error.message}`);
+      console.error(`[BACKEND] Stderr: ${stderr}`);
+      
+      let specificMessage = `Command failed with exit code ${error.code}.`;
+      if (toolName === 'get_file_history') {
+          if (stderr.toLowerCase().includes('not a git repository')) {
+              specificMessage = "Error: The current project is not a Git repository. Please initialize it with 'git init'.";
+          } else if (stderr.toLowerCase().includes("does not have any commits") || stderr.toLowerCase().includes("exists on disk, but not in 'head'")) {
+              specificMessage = "Error: The specified file is not tracked by Git or has no commit history.";
+          } else {
+              specificMessage = "An unknown Git error occurred. Check the backend logs for more details.";
+          }
+      }
+
       return res.status(500).json({
         status: 'Error',
-        message: `Command failed with exit code ${error.code}.`,
+        message: specificMessage,
         output: `stdout: ${stdout}\nstderr: ${stderr}`,
       });
     }

@@ -463,6 +463,28 @@ async function _queryCodebase({ query }) {
     return { results: queryResults };
 }
 
+async function _reindexCodebasePaths({ paths }, rootHandle) {
+    if (!paths || !Array.isArray(paths) || paths.length === 0) {
+        throw new Error("The 'paths' parameter is required and must be a non-empty array.");
+    }
+
+    UI.appendMessage(document.getElementById('chat-messages'), `Re-indexing ${paths.length} specific paths...`, 'ai');
+    
+    const index = await DbManager.getCodeIndex();
+    if (!index) {
+        throw new Error("No codebase index found. Please run 'build_or_update_codebase_index' first.");
+    }
+    const stats = { indexedFileCount: 0, skippedFileCount: 0, deletedFileCount: 0 };
+    const ignorePatterns = await FileSystem.getIgnorePatterns(rootHandle);
+
+    await CodebaseIndexer.reIndexPaths(rootHandle, paths, index, stats, ignorePatterns);
+
+    await DbManager.saveCodeIndex(index);
+    
+    const message = `Re-indexing complete for specified paths. ${stats.indexedFileCount} files were updated.`;
+    return { message };
+}
+
 async function _formatCode({ filename }, rootHandle) {
     const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
     const file = await fileHandle.getFile();
@@ -566,8 +588,30 @@ async function _getOpenFileContent() {
 async function _getSelectedText() {
     const editor = Editor.getEditorInstance();
     const selection = editor.getSelection();
-    if (!selection || selection.isEmpty()) throw new Error('No text is currently selected.');
-    return { selected_text: editor.getModel().getValueInRange(selection) };
+    if (!selection || selection.isEmpty()) {
+        throw new Error('No text is currently selected.');
+    }
+    const selectedText = editor.getModel().getValueInRange(selection);
+    return {
+        selected_text: selectedText,
+        start_line: selection.startLineNumber,
+        start_column: selection.startColumn,
+        end_line: selection.endLineNumber,
+        end_column: selection.endColumn,
+        details: `Selection from L${selection.startLineNumber}:C${selection.startColumn} to L${selection.endLineNumber}:C${selection.endColumn}`
+    };
+}
+
+async function _setSelectedText({ start_line, start_column, end_line, end_column }) {
+    if (start_line === undefined || start_column === undefined || end_line === undefined || end_column === undefined) {
+        throw new Error("Parameters 'start_line', 'start_column', 'end_line', and 'end_column' are required.");
+    }
+    const editor = Editor.getEditorInstance();
+    const range = new monaco.Range(start_line, start_column, end_line, end_column);
+    editor.setSelection(range);
+    editor.revealRange(range, monaco.editor.ScrollType.Smooth); // Scroll to the selection
+    editor.focus();
+    return { message: `Selection set to L${start_line}:C${start_column} to L${end_line}:C${end_column}.` };
 }
 
 async function _replaceSelectedText({ new_text }) {
@@ -592,6 +636,7 @@ const toolRegistry = {
     search_code: { handler: _searchCode, requiresProject: true, createsCheckpoint: false },
     build_or_update_codebase_index: { handler: _buildCodebaseIndex, requiresProject: true, createsCheckpoint: false },
     query_codebase: { handler: _queryCodebase, requiresProject: true, createsCheckpoint: false },
+    reindex_codebase_paths: { handler: _reindexCodebasePaths, requiresProject: true, createsCheckpoint: false },
     format_code: { handler: _formatCode, requiresProject: true, createsCheckpoint: false },
     analyze_code: { handler: _analyzeCode, requiresProject: true, createsCheckpoint: false },
     get_file_history: { handler: _getFileHistory, requiresProject: true, createsCheckpoint: false },
@@ -616,6 +661,7 @@ const toolRegistry = {
     get_open_file_content: { handler: _getOpenFileContent, requiresProject: false, createsCheckpoint: false },
     get_selected_text: { handler: _getSelectedText, requiresProject: false, createsCheckpoint: false },
     replace_selected_text: { handler: _replaceSelectedText, requiresProject: false, createsCheckpoint: false },
+    set_selected_text: { handler: _setSelectedText, requiresProject: false, createsCheckpoint: false },
     create_diff: { handler: _createDiff, requiresProject: false, createsCheckpoint: false },
 };
 

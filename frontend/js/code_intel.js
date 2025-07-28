@@ -44,7 +44,10 @@ export const CodebaseIndexer = {
                             continue;
                         }
                         const content = await file.text();
-                        index.files[newPath] = this.parseFileContent(content, newPath);
+                        index.files[newPath] = {
+                            definitions: this.parseFileContent(content, newPath),
+                            content: content.toLowerCase(), // Store full content for searching
+                        };
                         stats.indexedFileCount++;
                     } catch (e) {
                         console.warn(`Could not index file: ${newPath}`, e);
@@ -101,19 +104,65 @@ export const CodebaseIndexer = {
         const results = [];
         const lowerCaseQuery = query.toLowerCase();
         for (const filePath in index.files) {
-            for (const def of index.files[filePath]) {
-                if (
-                (def.name && def.name.toLowerCase().includes(lowerCaseQuery)) ||
-                (def.content && def.content.toLowerCase().includes(lowerCaseQuery))
-                ) {
-                    results.push({
-                        file: filePath,
-                        type: def.type,
-                        name: def.name || def.content,
-                    });
+            const fileData = index.files[filePath];
+            let foundInContent = false;
+
+            // First, check definitions for precise matches
+            if (fileData.definitions) {
+                for (const def of fileData.definitions) {
+                    if (
+                        (def.name && def.name.toLowerCase().includes(lowerCaseQuery)) ||
+                        (def.content && def.content.toLowerCase().includes(lowerCaseQuery))
+                    ) {
+                        results.push({
+                            file: filePath,
+                            type: def.type,
+                            name: def.name || def.content,
+                        });
+                        foundInContent = true; // Avoid duplicating results if also found in raw content
+                    }
+                }
+            }
+
+            // If not found in definitions, perform a general search on the file content
+            if (!foundInContent && fileData.content && fileData.content.includes(lowerCaseQuery)) {
+                 results.push({
+                    file: filePath,
+                    type: 'content-match',
+                    name: `Found '${query}' in file`,
+                });
+            }
+        }
+        if (results.length === 0) {
+            return [{
+                file: 'N/A',
+                type: 'info',
+                name: `No results found for query: "${query}". The index may need to be updated or the term may not exist.`
+            }];
+        }
+        return results;
+    },
+
+    async reIndexPaths(dirHandle, pathsToIndex, index, stats, ignorePatterns) {
+        for (const path of pathsToIndex) {
+            try {
+                const entry = await dirHandle.getDirectoryHandle(path, { create: false });
+                await this.traverseAndIndex(entry, path, index, 0, stats, new Set(), ignorePatterns);
+            } catch (e) {
+                // Not a directory, try as a file
+                try {
+                    const fileHandle = await dirHandle.getFileHandle(path, { create: false });
+                    const file = await fileHandle.getFile();
+                    const content = await file.text();
+                    index.files[path] = {
+                        definitions: this.parseFileContent(content, path),
+                        content: content.toLowerCase(),
+                    };
+                    stats.indexedFileCount++;
+                } catch (fileError) {
+                    console.warn(`Could not re-index path: ${path}`, fileError);
                 }
             }
         }
-        return results;
     },
 };
