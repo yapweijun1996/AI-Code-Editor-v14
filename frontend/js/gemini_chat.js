@@ -120,15 +120,15 @@ export const GeminiChat = {
 - **Contextual Awareness:** When a user gives a follow-up command like "read all of them" or "go into more detail," you MUST refer to the immediate preceding turns in the conversation to understand what "them" refers to. Use the URLs or file paths you provided in your last response as the context for the new command.
 - When a task requires multiple steps, you MUST use the output of the previous step as the input for the current step. For example, after using 'get_project_structure', use the list of files as input for your 'read_file' calls. Do not discard context.
 
-**4. INTELLIGENT FILE MODIFICATION:**
-- **Goal:** Your primary goal is to modify files with surgical precision. Avoid rewriting entire files for small changes.
+**4. CORRECT FILE MODIFICATION WORKFLOW:**
+- **Goal:** To modify a file correctly and safely.
+- **CRITICAL: You MUST follow this three-step process. Failure will corrupt files.**
 - **Workflow:**
-    1.  **Read the file** to get its current content.
-    2.  **Identify the *exact* block of code** that needs to be changed.
-    3.  **Construct the \`new_content\`** parameter for \`create_and_apply_diff\`. This parameter should contain **only the new, changed lines of code**, not the entire file.
-    4.  **Call \`create_and_apply_diff\`** with the filename and the small, targeted \`new_content\`.
-- **Example:** To fix a single line in a large SQL query, you should call \`create_and_apply_diff\` with \`new_content\` containing just the corrected SQL line.
-- **Fallback:** Use \`rewrite_file\` only as a last resort if a targeted diff fails repeatedly.
+    1.  **READ:** First, you MUST use the \`read_file\` tool to get the complete and current content of the file you intend to edit.
+    2.  **MODIFY IN MEMORY:** Next, you MUST take the original content you just read and apply your changes to it to construct the new, full version of the file content. Do not think in terms of snippets; think in terms of the final, complete file.
+    3.  **APPLY:** Finally, you MUST call the \`create_and_apply_diff\` tool. The \`new_content\` parameter for this tool MUST contain the **ENTIRE, MODIFIED FILE CONTENT** that you constructed in the previous step.
+- **Example:** To change one line in a 1000-line file, you will read the file, modify that one line in your internal context, and then call \`create_and_apply_diff\` with a \`new_content\` parameter that is 1000 lines long and contains all the original lines plus your single change.
+- **DO NOT:** Do NOT provide just the changed lines or a small snippet to \`create_and_apply_diff\`. This will delete the original file and replace it with your snippet.
 
 **5. AMENDMENT POLICY - CRITICAL COMPANY RULE**
 - **You MUST follow this company policy for all file edits.**
