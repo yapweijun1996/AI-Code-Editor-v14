@@ -360,12 +360,10 @@ export const GeminiChat = {
                     const toolPromises = functionCalls.map((call) => ToolExecutor.execute(call, this.rootDirectoryHandle));
                     const toolResults = await Promise.all(toolPromises);
                     promptParts = toolResults.map((toolResult) => {
-                        const response = toolResult.toolResponse.response;
-                        const responseToSend = typeof response === 'object' ? JSON.stringify(response) : response;
                         return {
                             functionResponse: {
                                 name: toolResult.toolResponse.name,
-                                response: responseToSend,
+                                response: toolResult.toolResponse.response,
                             },
                         };
                     });

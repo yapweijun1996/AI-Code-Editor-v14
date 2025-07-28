@@ -37,10 +37,7 @@ async function _readFile({ filename }, rootHandle) {
     await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
     document.getElementById('chat-input').focus();
     
-    const language = filename.split('.').pop();
-    const markdownContent = `\`\`\`${language}\n${content}\n\`\`\``;
-    
-    return { content: markdownContent };
+    return { content: content };
 }
 
 async function _readMultipleFiles({ filenames }, rootHandle) {
@@ -421,11 +418,8 @@ async function _getOpenFileContent() {
     const activeFile = Editor.getActiveFile();
     if (!activeFile) throw new Error('No file is currently open in the editor.');
     
-    const language = activeFile.name.split('.').pop();
     const content = activeFile.model.getValue();
-    const markdownContent = `\`\`\`${language}\n${content}\n\`\`\``;
-    
-    return { filename: activeFile.name, content: markdownContent };
+    return { filename: activeFile.name, content: content };
 }
 
 async function _getSelectedText() {
