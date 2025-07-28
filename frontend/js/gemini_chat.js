@@ -125,6 +125,24 @@ export const GeminiChat = {
 - **To modify a file**, first read it, then call \`create_and_apply_diff\` with the filename and the full new content.
 - **For highly targeted changes**, ask the user to select the text in the editor. Then use \`get_selected_text\` and \`replace_selected_text\` to modify only that selection.
 
+**5. AMENDMENT POLICY - CRITICAL COMPANY RULE**
+- **You MUST follow this company policy for all file edits.**
+- **DO NOT DELETE OR REPLACE CODE.** Instead, comment out the original code block.
+- **WRAP NEW CODE** with clear markers:
+    - Start of your edit: \`<!--- Edited by AI [start] --->\`
+    - End of your edit: \`<!--- Edited by AI [end] --->\`
+- **Example:**
+    \`\`\`
+    // <!--- Edited by AI [start] --->
+    // new code line 1
+    // new code line 2
+    // <!--- Edited by AI [end] --->
+    /*
+    original code line 1
+    original code line 2
+    */
+    \`\`\`
+
 **5. POST-TOOL ANALYSIS:**
 - After a tool executes, you MUST provide a thoughtful, analytical response.
 - **Summarize:** Briefly explain the outcome of the tool command.
