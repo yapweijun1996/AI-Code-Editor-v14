@@ -50,6 +50,68 @@ async function _readFile({ filename }, rootHandle) {
     return { content: content };
 }
 
+async function _readFileLines({ filename, start_line, end_line }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required.");
+    if (typeof start_line !== 'number' || typeof end_line !== 'number') {
+        throw new Error("The 'start_line' and 'end_line' parameters must be numbers.");
+    }
+    if (start_line > end_line) {
+        throw new Error("The 'start_line' must not be after the 'end_line'.");
+    }
+
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+    const file = await fileHandle.getFile();
+    const content = await file.text();
+    const lines = content.split('\n');
+    
+    // Clamp the line numbers to the file's bounds
+    const clampedStart = Math.max(1, start_line);
+    const clampedEnd = Math.min(lines.length, end_line);
+
+    if (clampedStart > clampedEnd) {
+        return { content: '' }; // Return empty if the range is invalid after clamping
+    }
+
+    const selectedLines = lines.slice(clampedStart - 1, clampedEnd);
+    return { content: selectedLines.join('\n') };
+}
+
+async function _searchInFile({ filename, pattern, context = 2 }, rootHandle) {
+    if (!filename) throw new Error("The 'filename' parameter is required.");
+    if (!pattern) throw new Error("The 'pattern' (string or regex) parameter is required.");
+
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+    const file = await fileHandle.getFile();
+    const content = await file.text();
+    const lines = content.split('\n');
+    
+    const searchResults = [];
+    const regex = new RegExp(pattern, 'g');
+
+    lines.forEach((line, index) => {
+        if (line.match(regex)) {
+            const start = Math.max(0, index - context);
+            const end = Math.min(lines.length, index + context + 1);
+            const contextLines = lines.slice(start, end).map((contextLine, contextIndex) => {
+                const lineNumber = start + contextIndex + 1;
+                return `${lineNumber}: ${contextLine}`;
+            });
+            
+            searchResults.push({
+                line_number: index + 1,
+                line_content: line,
+                context: contextLines.join('\n')
+            });
+        }
+    });
+
+    if (searchResults.length === 0) {
+        return { message: "No matches found." };
+    }
+
+    return { results: searchResults };
+}
+
 async function _readMultipleFiles({ filenames }, rootHandle) {
     if (!filenames || !Array.isArray(filenames) || filenames.length === 0) {
         throw new Error("The 'filenames' parameter is required and must be a non-empty array of strings.");
@@ -515,6 +577,8 @@ const toolRegistry = {
     // Project-based tools
     get_project_structure: { handler: _getProjectStructure, requiresProject: true, createsCheckpoint: false },
     read_file: { handler: _readFile, requiresProject: true, createsCheckpoint: false },
+    read_file_lines: { handler: _readFileLines, requiresProject: true, createsCheckpoint: false },
+    search_in_file: { handler: _searchInFile, requiresProject: true, createsCheckpoint: false },
     read_multiple_files: { handler: _readMultipleFiles, requiresProject: true, createsCheckpoint: false },
     search_code: { handler: _searchCode, requiresProject: true, createsCheckpoint: false },
     build_or_update_codebase_index: { handler: _buildCodebaseIndex, requiresProject: true, createsCheckpoint: false },

@@ -70,6 +70,8 @@ export const GeminiChat = {
                     { name: 'rename_file', description: "Renames a file. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { old_path: { type: 'STRING' }, new_path: { type: 'STRING' } }, required: ['old_path', 'new_path'] } },
                     { name: 'read_file', description: "Reads a file's content. CRITICAL: Do NOT include the root directory name in the path. Example: To read 'src/app.js', the path is 'src/app.js'.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
                     { name: 'read_multiple_files', description: "Reads and concatenates the content of multiple files. Essential for multi-file context tasks.", parameters: { type: 'OBJECT', properties: { filenames: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['filenames'] } },
+                    { name: 'read_file_lines', description: 'Reads a specific range of lines from a file. Use this for large files.', parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, start_line: { type: 'NUMBER' }, end_line: { type: 'NUMBER' } }, required: ['filename', 'start_line', 'end_line'] } },
+                    { name: 'search_in_file', description: 'Searches for a pattern in a file and returns matching lines. Use this for large files.', parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, pattern: { type: 'STRING' }, context: { type: 'NUMBER' } }, required: ['filename', 'pattern'] } },
                     { name: 'read_url', description: 'Reads and extracts the main content and all links from a given URL. The result will be a JSON object with "content" and "links" properties.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING' } }, required: ['url'] } },
                     { name: 'get_open_file_content', description: 'Gets the content of the currently open file in the editor.' },
                     { name: 'get_selected_text', description: 'Gets the text currently selected by the user in the editor.' },
@@ -128,7 +130,11 @@ export const GeminiChat = {
     - **For adding new, self-contained blocks of code (like a new function or class):** Use the \`insert_content\` tool. Specify the line number where the new code should be added. This avoids rewriting the entire file.
     - **For replacing a specific, small section of code that is visible in the editor:** Use the \`replace_selected_text\` tool. Ask the user to select the text first if necessary.
     - **For replacing a specific range of lines (e.g., an entire function):** Use the \`replace_lines\` tool. This is more precise than a full-file diff.
-    - **For complex or multi-location changes:** Default to the safe, full-file modification process:
+    - **For large files that cannot be read in full:**
+        1.  **SEARCH:** Use \`search_in_file\` to find the line numbers of the code you want to change.
+        2.  **READ:** Use \`read_file_lines\` to read the specific section you need to inspect.
+        3.  **MODIFY:** Use \`replace_lines\` or \`insert_content\` with the line numbers you found.
+    - **For complex or multi-location changes in normal-sized files:** Default to the safe, full-file modification process:
         1.  **READ:** Use \`read_file\` to get the complete, current file content.
         2.  **MODIFY IN MEMORY:** Construct the new, full version of the file content.
         3.  **APPLY:** Call \`create_and_apply_diff\` with the **ENTIRE, MODIFIED FILE CONTENT**.
