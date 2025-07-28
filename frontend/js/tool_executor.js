@@ -228,6 +228,12 @@ async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
 
     const dmp = new diff_match_patch();
     const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+
+    // First, ensure we have permission to write to the file.
+    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
+        throw new Error('Permission to write to the file was denied.');
+    }
+
     const file = await fileHandle.getFile();
     const originalContent = await file.text();
     const cleanNewContent = stripMarkdownCodeBlock(new_content);
@@ -247,9 +253,6 @@ async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
         throw new Error(`Failed to apply patch to '${filename}'. The patch may not be valid.`);
     }
 
-    if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
-        throw new Error('Permission to write to the file was denied.');
-    }
     const writable = await fileHandle.createWritable();
     await writable.write(patchedContent);
     await writable.close();
