@@ -6,6 +6,9 @@ import * as UI from './ui.js';
 import { ChatService } from './chat_service.js';
 import { UndoManager } from './undo_manager.js';
 import { ToolLogger } from './tool_logger.js';
+import { syntaxValidator } from './syntax_validator.js';
+import { codeComprehension } from './code_comprehension.js';
+import { preciseEditor } from './precise_editor.js';
 
 // --- Helper Functions ---
 
@@ -19,37 +22,30 @@ function stripMarkdownCodeBlock(content) {
    return match ? match[1] : content;
 }
 
-// Syntax validation before writing files
+// Enhanced syntax validation using the new validator
 async function validateSyntaxBeforeWrite(filename, content) {
-    const extension = filename.split('.').pop();
-    const languageMap = {
-        'js': 'javascript',
-        'jsx': 'javascript', 
-        'ts': 'typescript',
-        'tsx': 'typescript',
-        'css': 'css',
-        'html': 'html',
-        'json': 'json'
-    };
-    
-    const language = languageMap[extension];
-    if (!language) return true; // Skip validation for unsupported file types
-    
     try {
-        // Create temporary model for validation
-        const tempModel = monaco.editor.createModel(content, language);
+        const validation = await syntaxValidator.validateSyntax(filename, content);
         
-        // Wait a bit for Monaco to process the model
-        await new Promise(resolve => setTimeout(resolve, 100));
+        if (!validation.valid) {
+            const errorMessages = validation.errors.map(e => `Line ${e.line}: ${e.message}`).join('\n');
+            
+            // Show warnings but don't block
+            if (validation.warnings && validation.warnings.length > 0) {
+                console.warn('Syntax warnings:', validation.warnings);
+            }
+            
+            // Show suggestions
+            if (validation.suggestions && validation.suggestions.length > 0) {
+                console.info('Suggestions:', validation.suggestions);
+            }
+            
+            throw new Error(`Syntax validation failed:\n${errorMessages}\n\nSuggestions: ${validation.suggestions?.join(', ') || 'Check syntax manually'}`);
+        }
         
-        const markers = monaco.editor.getModelMarkers({ resource: tempModel.uri });
-        const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
-        
-        tempModel.dispose(); // Clean up
-        
-        if (errors.length > 0) {
-            const errorMessages = errors.map(e => `Line ${e.startLineNumber}: ${e.message}`).join('\n');
-            throw new Error(`Syntax validation failed:\n${errorMessages}`);
+        // Log warnings even if validation passes
+        if (validation.warnings && validation.warnings.length > 0) {
+            console.warn(`Syntax warnings in ${filename}:`, validation.warnings);
         }
         
         return true;
@@ -1017,12 +1013,155 @@ async function _listTools() {
    return { tools: toolNames };
 }
 
+// --- Enhanced Code Comprehension Tools ---
+
+async function _analyzeSymbol({ symbol_name, file_path }, rootHandle) {
+    if (!symbol_name) throw new Error("The 'symbol_name' parameter is required.");
+    if (!file_path) throw new Error("The 'file_path' parameter is required.");
+    
+    const analysis = await codeComprehension.analyzeSymbol(symbol_name, file_path, rootHandle);
+    return { analysis };
+}
+
+async function _explainCodeSection({ file_path, start_line, end_line }, rootHandle) {
+    if (!file_path) throw new Error("The 'file_path' parameter is required.");
+    if (typeof start_line !== 'number') throw new Error("The 'start_line' parameter is required and must be a number.");
+    if (typeof end_line !== 'number') throw new Error("The 'end_line' parameter is required and must be a number.");
+    
+    const explanation = await codeComprehension.explainCodeSection(file_path, start_line, end_line, rootHandle);
+    return { explanation };
+}
+
+async function _traceVariableFlow({ variable_name, file_path }, rootHandle) {
+    if (!variable_name) throw new Error("The 'variable_name' parameter is required.");
+    if (!file_path) throw new Error("The 'file_path' parameter is required.");
+    
+    const analysis = await codeComprehension.analyzeSymbol(variable_name, file_path, rootHandle);
+    return {
+        variable: variable_name,
+        definitions: analysis.definitions,
+        usages: analysis.usages,
+        dataFlow: analysis.dataFlow,
+        relatedFiles: analysis.relatedFiles
+    };
+}
+
+// --- Precise Code Modification Tools ---
+
+async function _modifyFunction({ file_path, function_name, new_implementation }, rootHandle) {
+    if (!file_path) throw new Error("The 'file_path' parameter is required.");
+    if (!function_name) throw new Error("The 'function_name' parameter is required.");
+    if (!new_implementation) throw new Error("The 'new_implementation' parameter is required.");
+    
+    const cleanImplementation = stripMarkdownCodeBlock(new_implementation);
+    const result = await preciseEditor.modifyFunction(file_path, function_name, cleanImplementation, rootHandle);
+    
+    await Editor.openFile(await FileSystem.getFileHandleFromPath(rootHandle, file_path), file_path, document.getElementById('tab-bar'), false);
+    document.getElementById('chat-input').focus();
+    
+    return result;
+}
+
+async function _modifyClass({ file_path, class_name, new_implementation }, rootHandle) {
+    if (!file_path) throw new Error("The 'file_path' parameter is required.");
+    if (!class_name) throw new Error("The 'class_name' parameter is required.");
+    if (!new_implementation) throw new Error("The 'new_implementation' parameter is required.");
+    
+    const cleanImplementation = stripMarkdownCodeBlock(new_implementation);
+    const result = await preciseEditor.modifyClass(file_path, class_name, cleanImplementation, rootHandle);
+    
+    await Editor.openFile(await FileSystem.getFileHandleFromPath(rootHandle, file_path), file_path, document.getElementById('tab-bar'), false);
+    document.getElementById('chat-input').focus();
+    
+    return result;
+}
+
+async function _renameSymbol({ old_name, new_name, file_paths }, rootHandle) {
+    if (!old_name) throw new Error("The 'old_name' parameter is required.");
+    if (!new_name) throw new Error("The 'new_name' parameter is required.");
+    if (!file_paths || !Array.isArray(file_paths)) throw new Error("The 'file_paths' parameter is required and must be an array.");
+    
+    const result = await preciseEditor.renameSymbol(old_name, new_name, file_paths, rootHandle);
+    
+    // Open the first modified file
+    if (result.successful > 0) {
+        const firstSuccessful = result.details.find(d => d.status === 'success');
+        if (firstSuccessful) {
+            await Editor.openFile(await FileSystem.getFileHandleFromPath(rootHandle, firstSuccessful.file), firstSuccessful.file, document.getElementById('tab-bar'), false);
+        }
+    }
+    
+    document.getElementById('chat-input').focus();
+    return result;
+}
+
+async function _addMethodToClass({ file_path, class_name, method_name, method_implementation }, rootHandle) {
+    if (!file_path) throw new Error("The 'file_path' parameter is required.");
+    if (!class_name) throw new Error("The 'class_name' parameter is required.");
+    if (!method_name) throw new Error("The 'method_name' parameter is required.");
+    if (!method_implementation) throw new Error("The 'method_implementation' parameter is required.");
+    
+    const cleanImplementation = stripMarkdownCodeBlock(method_implementation);
+    const result = await preciseEditor.addMethodToClass(file_path, class_name, method_name, cleanImplementation, rootHandle);
+    
+    await Editor.openFile(await FileSystem.getFileHandleFromPath(rootHandle, file_path), file_path, document.getElementById('tab-bar'), false);
+    document.getElementById('chat-input').focus();
+    
+    return result;
+}
+
+async function _updateImports({ file_path, import_changes }, rootHandle) {
+    if (!file_path) throw new Error("The 'file_path' parameter is required.");
+    if (!import_changes || !Array.isArray(import_changes)) throw new Error("The 'import_changes' parameter is required and must be an array.");
+    
+    const result = await preciseEditor.updateImports(file_path, import_changes, rootHandle);
+    
+    await Editor.openFile(await FileSystem.getFileHandleFromPath(rootHandle, file_path), file_path, document.getElementById('tab-bar'), false);
+    document.getElementById('chat-input').focus();
+    
+    return result;
+}
+
+// --- Enhanced Analysis Tools ---
+
+async function _validateSyntax({ file_path }, rootHandle) {
+    if (!file_path) throw new Error("The 'file_path' parameter is required.");
+    
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, file_path);
+    const file = await fileHandle.getFile();
+    const content = await file.text();
+    
+    const validation = await syntaxValidator.validateSyntax(file_path, content);
+    
+    return {
+        file: file_path,
+        valid: validation.valid,
+        language: validation.language,
+        errors: validation.errors || [],
+        warnings: validation.warnings || [],
+        suggestions: validation.suggestions || []
+    };
+}
+
 // --- Tool Registry ---
 
 const toolRegistry = {
    list_tools: { handler: _listTools, requiresProject: false, createsCheckpoint: false },
     // Project-based tools
     get_project_structure: { handler: _getProjectStructure, requiresProject: true, createsCheckpoint: false },
+    
+    // Enhanced code comprehension tools
+    analyze_symbol: { handler: _analyzeSymbol, requiresProject: true, createsCheckpoint: false },
+    explain_code_section: { handler: _explainCodeSection, requiresProject: true, createsCheckpoint: false },
+    trace_variable_flow: { handler: _traceVariableFlow, requiresProject: true, createsCheckpoint: false },
+    validate_syntax: { handler: _validateSyntax, requiresProject: true, createsCheckpoint: false },
+    
+    // Precise code modification tools
+    modify_function: { handler: _modifyFunction, requiresProject: true, createsCheckpoint: true },
+    modify_class: { handler: _modifyClass, requiresProject: true, createsCheckpoint: true },
+    rename_symbol: { handler: _renameSymbol, requiresProject: true, createsCheckpoint: true },
+    add_method_to_class: { handler: _addMethodToClass, requiresProject: true, createsCheckpoint: true },
+    update_imports: { handler: _updateImports, requiresProject: true, createsCheckpoint: true },
     read_file: { handler: _readFile, requiresProject: true, createsCheckpoint: false },
     read_file_lines: { handler: _readFileLines, requiresProject: true, createsCheckpoint: false },
     search_in_file: { handler: _searchInFile, requiresProject: true, createsCheckpoint: false },
@@ -1195,6 +1334,19 @@ export function getToolDefinitions() {
             { name: 'format_code', description: "Formats a file with Prettier. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
             { name: 'analyze_code', description: "Analyzes a JavaScript file's structure. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
             { name: 'rewrite_file', description: "Rewrites a file with new content. Use this as a last resort when other tools fail. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, content: { type: 'STRING', description: 'The new, raw text content of the file. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'content'] } },
+            
+            // Enhanced code comprehension tools
+            { name: 'analyze_symbol', description: 'Analyzes a symbol (variable, function, class) across the entire codebase to understand its usage, definition, and relationships.', parameters: { type: 'OBJECT', properties: { symbol_name: { type: 'STRING', description: 'The name of the symbol to analyze' }, file_path: { type: 'STRING', description: 'The file path where the symbol is used or defined' } }, required: ['symbol_name', 'file_path'] } },
+            { name: 'explain_code_section', description: 'Provides detailed explanation of a complex code section including complexity analysis, symbols, and control flow.', parameters: { type: 'OBJECT', properties: { file_path: { type: 'STRING' }, start_line: { type: 'NUMBER' }, end_line: { type: 'NUMBER' } }, required: ['file_path', 'start_line', 'end_line'] } },
+            { name: 'trace_variable_flow', description: 'Traces the data flow of a variable through the codebase to understand how data moves and transforms.', parameters: { type: 'OBJECT', properties: { variable_name: { type: 'STRING' }, file_path: { type: 'STRING' } }, required: ['variable_name', 'file_path'] } },
+            { name: 'validate_syntax', description: 'Validates the syntax of a file and provides detailed errors, warnings, and suggestions.', parameters: { type: 'OBJECT', properties: { file_path: { type: 'STRING' } }, required: ['file_path'] } },
+            
+            // Precise code modification tools (safer alternatives to rewrite_file)
+            { name: 'modify_function', description: 'Modifies a specific function in a file without rewriting the entire file. Much safer than rewrite_file.', parameters: { type: 'OBJECT', properties: { file_path: { type: 'STRING' }, function_name: { type: 'STRING' }, new_implementation: { type: 'STRING', description: 'The new function implementation' } }, required: ['file_path', 'function_name', 'new_implementation'] } },
+            { name: 'modify_class', description: 'Modifies a specific class in a file without rewriting the entire file. Much safer than rewrite_file.', parameters: { type: 'OBJECT', properties: { file_path: { type: 'STRING' }, class_name: { type: 'STRING' }, new_implementation: { type: 'STRING', description: 'The new class implementation' } }, required: ['file_path', 'class_name', 'new_implementation'] } },
+            { name: 'rename_symbol', description: 'Safely renames a symbol (variable, function, class) across multiple files with validation.', parameters: { type: 'OBJECT', properties: { old_name: { type: 'STRING' }, new_name: { type: 'STRING' }, file_paths: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Array of file paths to search and replace in' } }, required: ['old_name', 'new_name', 'file_paths'] } },
+            { name: 'add_method_to_class', description: 'Adds a new method to an existing class without rewriting the entire file.', parameters: { type: 'OBJECT', properties: { file_path: { type: 'STRING' }, class_name: { type: 'STRING' }, method_name: { type: 'STRING' }, method_implementation: { type: 'STRING' } }, required: ['file_path', 'class_name', 'method_name', 'method_implementation'] } },
+            { name: 'update_imports', description: 'Updates import statements in a file (add, remove, or modify imports).', parameters: { type: 'OBJECT', properties: { file_path: { type: 'STRING' }, import_changes: { type: 'ARRAY', items: { type: 'OBJECT' }, description: 'Array of import changes with action (add/remove/modify), from, imports, newImports properties' } }, required: ['file_path', 'import_changes'] } },
         ],
     };
 }

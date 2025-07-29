@@ -6,6 +6,8 @@ import * as FileSystem from './file_system.js';
 import * as ToolExecutor from './tool_executor.js';
 import * as Editor from './editor.js';
 import * as UI from './ui.js';
+import { performanceOptimizer } from './performance_optimizer.js';
+import { providerOptimizer } from './provider_optimizer.js';
 
 export const ChatService = {
     isSending: false,
@@ -33,7 +35,14 @@ export const ChatService = {
     async _initializeLLMService() {
         const llmSettings = Settings.getLLMSettings();
         this.llmService = LLMServiceFactory.create(llmSettings.provider, llmSettings);
+        
+        // Initialize provider-specific optimizations
+        this.currentProvider = llmSettings.provider;
         console.log(`LLM Service initialized with provider: ${llmSettings.provider}`);
+        
+        // Set up performance monitoring
+        performanceOptimizer.startTimer('llm_initialization');
+        performanceOptimizer.endTimer('llm_initialization');
     },
 
     async _startChat(history = []) {
