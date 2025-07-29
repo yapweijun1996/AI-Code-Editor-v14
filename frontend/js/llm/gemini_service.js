@@ -17,41 +17,82 @@ export class GeminiService extends BaseLLMService {
 
     async *sendMessageStream(history, tools, customRules = '') {
         await this.apiKeyManager.loadKeys('gemini');
-        const currentApiKey = this.apiKeyManager.getCurrentKey();
-        if (!currentApiKey) {
-            throw new Error("Gemini API key is not set or available.");
-        }
+        this.apiKeyManager.resetTriedKeys(); // Reset for new request
 
-        const mode = document.getElementById('agent-mode-selector').value;
-        const systemInstruction = this._getSystemInstruction(mode, customRules);
+        while (true) {
+            const currentApiKey = this.apiKeyManager.getCurrentKey();
+            if (!currentApiKey) {
+                throw new Error("Gemini API key is not set or available.");
+            }
+
+            try {
+                const mode = document.getElementById('agent-mode-selector').value;
+                const systemInstruction = this._getSystemInstruction(mode, customRules);
+                
+                const genAI = new GoogleGenerativeAI(currentApiKey);
+
+                const model = genAI.getGenerativeModel({
+                    model: this.model,
+                    systemInstruction: { parts: [{ text: systemInstruction }] },
+                    tools: [tools],
+                });
+
+                const chat = model.startChat({
+                    history: this._prepareMessages(history),
+                    safetySettings: [
+                        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+                    ],
+                });
+
+                const lastUserMessage = history[history.length - 1].parts;
+                const result = await chat.sendMessageStream(lastUserMessage);
+
+                for await (const chunk of result.stream) {
+                    yield {
+                        text: chunk.text(),
+                        functionCalls: chunk.functionCalls(),
+                    };
+                }
+
+                // If we get here, the request was successful
+                return;
+
+            } catch (error) {
+                // Check if this is a rate limit or API key related error
+                const isRetryableError = this._isRetryableError(error);
+                
+                if (isRetryableError && !this.apiKeyManager.hasTriedAllKeys()) {
+                    console.warn(`Gemini API error with current key: ${error.message}. Trying next key...`);
+                    this.apiKeyManager.rotateKey();
+                    continue; // Try with next key
+                } else {
+                    // Either not a retryable error, or we've tried all keys
+                    throw error;
+                }
+            }
+        }
+    }
+
+    _isRetryableError(error) {
+        const errorMessage = error.message || '';
+        const errorString = errorMessage.toLowerCase();
         
-        const genAI = new GoogleGenerativeAI(currentApiKey);
-
-        const model = genAI.getGenerativeModel({
-            model: this.model,
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            tools: [tools],
-        });
-
-        const chat = model.startChat({
-            history: this._prepareMessages(history),
-            safetySettings: [
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-            ],
-        });
-
-        const lastUserMessage = history[history.length - 1].parts;
-        const result = await chat.sendMessageStream(lastUserMessage);
-
-        for await (const chunk of result.stream) {
-            yield {
-                text: chunk.text(),
-                functionCalls: chunk.functionCalls(),
-            };
+        // Check for rate limit errors (429)
+        if (errorString.includes('429') || errorString.includes('quota') || errorString.includes('rate limit')) {
+            return true;
         }
+        
+        // Check for invalid API key errors (401, 403)
+        if (errorString.includes('401') || errorString.includes('403') || 
+            errorString.includes('unauthorized') || errorString.includes('forbidden') ||
+            errorString.includes('invalid api key') || errorString.includes('api key')) {
+            return true;
+        }
+        
+        return false;
     }
 
     _prepareMessages(history) {

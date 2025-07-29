@@ -280,3 +280,70 @@ export function createFsAdapter(rootDirectoryHandle) {
         }
     };
 }
+
+// Functions for project structure tool
+export async function buildStructureTree(dirHandle, ignorePatterns, currentPath = '') {
+    const tree = { name: 'root', type: 'folder', children: [] };
+    await buildStructureTreeRecursive(dirHandle, ignorePatterns, tree, currentPath);
+    return tree;
+}
+
+async function buildStructureTreeRecursive(dirHandle, ignorePatterns, parentNode, currentPath = '') {
+    for await (const entry of dirHandle.values()) {
+        const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        
+        // Check if this path should be ignored
+        if (ignorePatterns.some(pattern => {
+            const normalizedPattern = pattern.replace(/\/$/, '');
+            return newPath.startsWith(normalizedPattern) || entry.name === normalizedPattern;
+        })) {
+            continue;
+        }
+
+        const node = {
+            name: entry.name,
+            type: entry.kind === 'directory' ? 'folder' : 'file',
+            path: newPath
+        };
+
+        if (entry.kind === 'directory') {
+            node.children = [];
+            await buildStructureTreeRecursive(entry, ignorePatterns, node, newPath);
+        }
+
+        parentNode.children.push(node);
+    }
+
+    // Sort children: folders first, then files, both alphabetically
+    parentNode.children.sort((a, b) => {
+        if (a.type === 'folder' && b.type !== 'folder') return -1;
+        if (a.type !== 'folder' && b.type === 'folder') return 1;
+        return a.name.localeCompare(b.name);
+    });
+}
+
+export function formatTreeToString(tree, indent = '', isLast = true) {
+    if (!tree || tree.name === 'root') {
+        // For root, just format its children
+        if (!tree.children || tree.children.length === 0) {
+            return 'Project directory is empty.';
+        }
+        return tree.children
+            .map((child, index) => formatTreeToString(child, '', index === tree.children.length - 1))
+            .join('\n');
+    }
+
+    const prefix = isLast ? '└── ' : '├── ';
+    const nextIndent = indent + (isLast ? '    ' : '│   ');
+    
+    let result = indent + prefix + tree.name;
+    
+    if (tree.type === 'folder' && tree.children && tree.children.length > 0) {
+        const childrenStr = tree.children
+            .map((child, index) => formatTreeToString(child, nextIndent, index === tree.children.length - 1))
+            .join('\n');
+        result += '\n' + childrenStr;
+    }
+    
+    return result;
+}
