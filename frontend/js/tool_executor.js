@@ -48,7 +48,10 @@ async function _readFile({ filename }, rootHandle) {
     }
 
     const content = await file.text();
-    return { content: content };
+    // There seems to be an issue with the return value being mutated.
+    // Creating a new object explicitly can prevent this.
+    const result = { content: content };
+    return result;
 }
 
 async function _readFileLines({ filename, start_line, end_line }, rootHandle) {
