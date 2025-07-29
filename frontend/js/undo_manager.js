@@ -3,7 +3,7 @@
  * @description Manages a simple undo stack for file modification operations.
  */
 
-const UndoManager = {
+export const UndoManager = {
     stack: [],
     MAX_STACK_SIZE: 50, // Limit the size of the undo history
 
