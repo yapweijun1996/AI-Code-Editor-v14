@@ -216,6 +216,19 @@ export const DbManager = {
                 resolve(request.result ? request.result.value : null);
         });
     },
+
+    async saveMultipleSettings(settings) {
+        const db = await this.openDb();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(this.stores.settings, 'readwrite');
+            const store = transaction.objectStore(this.stores.settings);
+            settings.forEach(setting => {
+                store.put({ id: setting.id, value: setting.value });
+            });
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject('Error saving multiple settings.');
+        });
+    },
     async saveChatHistory(history) {
         const db = await this.openDb();
         return new Promise((resolve, reject) => {

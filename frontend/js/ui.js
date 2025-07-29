@@ -362,16 +362,18 @@ export async function updateIndexedDBUsage() {
 
 export async function saveLLMSettings() {
     const provider = document.querySelector('.settings-tabs .tab-link.active').dataset.tab.replace('-settings', '');
-    await Settings.set('llm.provider', provider);
 
-    await Settings.set('llm.gemini.apiKey', document.getElementById('gemini-api-keys').value);
-    await Settings.set('llm.gemini.model', document.getElementById('gemini-model-selector').value);
-    
-    await Settings.set('llm.openai.apiKey', document.getElementById('openai-api-key').value);
-    await Settings.set('llm.openai.model', document.getElementById('openai-model-selector').value);
+    const settingsToSave = {
+        'llm.provider': provider,
+        'llm.gemini.apiKey': document.getElementById('gemini-api-keys').value,
+        'llm.gemini.model': document.getElementById('gemini-model-selector').value,
+        'llm.openai.apiKey': document.getElementById('openai-api-key').value,
+        'llm.openai.model': document.getElementById('openai-model-selector').value,
+        'llm.ollama.baseURL': document.getElementById('ollama-base-url').value,
+        'llm.ollama.model': document.getElementById('ollama-model-name').value,
+    };
 
-    await Settings.set('llm.ollama.baseURL', document.getElementById('ollama-base-url').value);
-    await Settings.set('llm.ollama.model', document.getElementById('ollama-model-name').value);
+    await Settings.setMultiple(settingsToSave);
 
     dispatchLLMSettingsUpdated();
     showToast('Settings saved successfully!');

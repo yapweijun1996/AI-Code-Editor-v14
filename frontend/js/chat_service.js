@@ -1,5 +1,6 @@
 import { LLMServiceFactory } from './llm/service_factory.js';
 import { Settings } from './settings.js';
+import { DbManager } from './db.js';
 import { CodebaseIndexer } from './code_intel.js';
 import * as FileSystem from './file_system.js';
 import * as ToolExecutor from './tool_executor.js';
@@ -21,7 +22,7 @@ export const ChatService = {
         this.rootDirectoryHandle = rootDirectoryHandle;
         await this._initializeLLMService();
 
-        const chatHistory = await Settings.getChatHistory();
+        const chatHistory = await DbManager.getChatHistory();
         if (chatHistory.length > 0) {
             console.log(`[Chat History] Found ${chatHistory.length} messages.`);
             const chatMessages = document.getElementById('chat-messages');
@@ -114,7 +115,7 @@ export const ChatService = {
             return;
         }
 
-        const history = await Settings.getChatHistory();
+        const history = await DbManager.getChatHistory();
         history.push({ role: 'user', parts: initialParts });
 
         let functionCalls;
@@ -172,7 +173,7 @@ export const ChatService = {
             }
         } while (functionCalls.length > 0 && !this.isCancelled);
 
-        await Settings.saveChatHistory(history);
+        await DbManager.saveChatHistory(history);
     },
 
     async sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, uploadedImage, clearImagePreview) {
@@ -220,13 +221,13 @@ export const ChatService = {
     async clearHistory(chatMessages) {
         chatMessages.innerHTML = '';
         UI.appendMessage(chatMessages, 'Conversation history cleared.', 'ai');
-        await Settings.clearChatHistory();
+        await DbManager.clearChatHistory();
         await this._initializeLLMService();
     },
 
     async condenseHistory(chatMessages) {
         UI.appendMessage(chatMessages, 'Condensing history... This will start a new session.', 'ai');
-        const history = await Settings.getChatHistory();
+        const history = await DbManager.getChatHistory();
         if (history.length === 0) {
             UI.appendMessage(chatMessages, 'History is already empty.', 'ai');
             return;
@@ -253,7 +254,7 @@ export const ChatService = {
     },
 
     async viewHistory() {
-        const history = await Settings.getChatHistory();
+        const history = await DbManager.getChatHistory();
         return JSON.stringify(history, null, 2);
     },
 

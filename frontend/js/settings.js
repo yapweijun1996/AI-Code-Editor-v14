@@ -65,6 +65,22 @@ export const Settings = {
         }
     },
 
+    async setMultiple(settings) {
+        const settingsToSave = [];
+        for (const key in settings) {
+            const value = settings[key];
+            const valueToSave = typeof value === 'string' ? value.trim() : value;
+            this.cache.set(key, valueToSave);
+            settingsToSave.push({ id: key, value: valueToSave });
+            if (key.includes('apiKey')) {
+                console.log(`Setting "${key}" updated to "[REDACTED]".`);
+            } else {
+                console.log(`Setting "${key}" updated to "${value}".`);
+            }
+        }
+        await DbManager.saveMultipleSettings(settingsToSave);
+    },
+
     /**
      * Gets all settings required to configure an LLM service.
      * This abstracts the underlying storage from the consumers.
