@@ -5,6 +5,7 @@ import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import * as FileSystem from './file_system.js';
 import TaskRunner from './task_runner.js';
+import { ToolLogger } from './tool_logger.js';
 
 export function initializeEventListeners(appState) {
     const {

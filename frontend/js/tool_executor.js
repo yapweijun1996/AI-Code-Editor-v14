@@ -5,6 +5,7 @@ import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import { ChatService } from './chat_service.js';
 import { UndoManager } from './undo_manager.js';
+import { ToolLogger } from './tool_logger.js';
 
 // --- Helper Functions ---
 

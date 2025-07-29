@@ -3,7 +3,7 @@
  * @description Handles logging of AI tool executions for transparency and debugging.
  */
 
-const ToolLogger = {
+export const ToolLogger = {
     DB_NAME: 'ToolExecutionDB',
     STORE_NAME: 'ToolLogs',
     db: null,
