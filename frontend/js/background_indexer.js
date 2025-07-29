@@ -93,6 +93,20 @@ export class BackgroundIndexer {
     }
 
     /**
+     * Search the index for a term
+     * @param {string} searchTerm - The term to search for
+     * @param {boolean} caseSensitive - Whether the search is case sensitive
+     */
+    async searchInIndex(searchTerm, caseSensitive = false) {
+        try {
+            return await this.sendMessage('searchInIndex', { searchTerm, caseSensitive });
+        } catch (error) {
+            console.error('Background search failed:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Perform full reindex of all files
      * @param {Array} files - Array of {path, content} objects
      */

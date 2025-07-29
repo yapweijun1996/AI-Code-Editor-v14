@@ -9,6 +9,7 @@ import { ToolLogger } from './tool_logger.js';
 import { syntaxValidator } from './syntax_validator.js';
 import { codeComprehension } from './code_comprehension.js';
 import { preciseEditor } from './precise_editor.js';
+import { backgroundIndexer } from './background_indexer.js';
 
 // --- Helper Functions ---
 
@@ -642,9 +643,10 @@ async function _renameFolder({ old_folder_path, new_folder_path }, rootHandle) {
 }
 
 async function _searchCode({ search_term }, rootHandle) {
-    const ignorePatterns = await FileSystem.getIgnorePatterns(rootHandle);
-    const searchResults = [];
-    await FileSystem.searchInDirectory(rootHandle, search_term, '', searchResults, ignorePatterns);
+    if (!backgroundIndexer.isAvailable()) {
+        throw new Error("The background indexer is not ready. Please wait a moment and try again.");
+    }
+    const searchResults = await backgroundIndexer.searchInIndex(search_term);
    
    const successfulResults = searchResults.filter(r => r.matches);
    const erroredFiles = searchResults.filter(r => r.error);

@@ -46,6 +46,7 @@ export const CodebaseIndexer = {
                         const content = await file.text();
                         index.files[newPath] = {
                             definitions: this.parseFileContent(content, newPath),
+                            content: content, // Store full content for fast search
                         };
                         stats.indexedFileCount++;
                     } catch (e) {
@@ -148,6 +149,7 @@ export const CodebaseIndexer = {
                     const content = await file.text();
                     index.files[path] = {
                         definitions: this.parseFileContent(content, path),
+                        content: content, // Store full content for fast search
                     };
                     stats.indexedFileCount++;
                 } catch (fileError) {

@@ -62,6 +62,7 @@ class WorkerCodebaseIndexer {
                     try {
                         this.currentIndex.files[path] = {
                             definitions: this.parseFileContent(content, path),
+                            content: content, // Store full content
                             lastModified: Date.now()
                         };
                         stats.indexedFileCount++;
@@ -134,6 +135,25 @@ class WorkerCodebaseIndexer {
         return results.slice(0, 50); // Limit to top 50 results
     }
 
+    searchInIndex({ searchTerm, caseSensitive = false }) {
+        const results = [];
+        const term = caseSensitive ? searchTerm : searchTerm.toLowerCase();
+
+        for (const [filePath, fileData] of Object.entries(this.currentIndex.files)) {
+            if (fileData.content) {
+                const content = caseSensitive ? fileData.content : fileData.content.toLowerCase();
+                if (content.includes(term)) {
+                    // Simple search for now, can be expanded to return line numbers etc.
+                    results.push({
+                        file: filePath,
+                        matches: true // Simplified result
+                    });
+                }
+            }
+        }
+        return results;
+    }
+
     fullReindex(fileData) {
         this.currentIndex = { files: {} };
         const stats = { indexedFileCount: 0, skippedFileCount: 0, deletedFileCount: 0 };
@@ -145,6 +165,7 @@ class WorkerCodebaseIndexer {
                 try {
                     this.currentIndex.files[path] = {
                         definitions: this.parseFileContent(content, path),
+                        content: content, // Store full content
                         lastModified: Date.now()
                     };
                     stats.indexedFileCount++;
@@ -187,6 +208,10 @@ self.onmessage = function(e) {
             case 'setIndex':
                 indexer.currentIndex = data.index;
                 result = { success: true };
+                break;
+
+            case 'searchInIndex':
+                result = indexer.searchInIndex(data);
                 break;
                 
             default:
