@@ -40,7 +40,7 @@ export const ChatService = {
         // This method will now be simpler. The complex setup (prompts, tools)
         // will be handled by the specific LLMService implementation.
         // For now, we just ensure the service is ready.
-        if (!this.llmService || !this.llmService.isConfigured()) {
+        if (!this.llmService || !(await this.llmService.isConfigured())) {
             console.warn("LLM service not configured. Chat will not start. Please configure settings.");
             return;
         }

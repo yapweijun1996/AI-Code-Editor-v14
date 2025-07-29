@@ -9,13 +9,15 @@ export class OpenAIService extends BaseLLMService {
         this.apiBaseUrl = 'https://api.openai.com/v1';
     }
 
-    isConfigured() {
-        const currentApiKey = this.apiKeyManager.getCurrentKey('openai');
+    async isConfigured() {
+        await this.apiKeyManager.loadKeys('openai');
+        const currentApiKey = this.apiKeyManager.getCurrentKey();
         return !!currentApiKey;
     }
 
     async *sendMessageStream(history, tools, customRules) {
-        const currentApiKey = this.apiKeyManager.getCurrentKey('openai');
+        await this.apiKeyManager.loadKeys('openai');
+        const currentApiKey = this.apiKeyManager.getCurrentKey();
         if (!currentApiKey) {
             throw new Error("OpenAI API key is not set or available.");
         }
@@ -95,31 +97,41 @@ export class OpenAIService extends BaseLLMService {
         const systemPrompt = `You are an expert AI programmer. ${customRules || ''}`;
         const messages = [{ role: 'system', content: systemPrompt }];
 
+        // Track tool calls to ensure proper pairing
+        const pendingToolCalls = new Map();
+
         for (const turn of history) {
             if (turn.role === 'user') {
                 const toolResponses = turn.parts.filter(p => p.functionResponse);
                 if (toolResponses.length > 0) {
+                    // Only add tool responses if we have matching pending tool calls
                     toolResponses.forEach(responsePart => {
-                        messages.push({
-                            role: 'tool',
-                            tool_call_id: responsePart.functionResponse.id,
-                            name: responsePart.functionResponse.name,
-                            content: JSON.stringify(responsePart.functionResponse.response),
-                        });
+                        const toolCallId = responsePart.functionResponse.id;
+                        if (pendingToolCalls.has(toolCallId)) {
+                            messages.push({
+                                role: 'tool',
+                                tool_call_id: toolCallId,
+                                name: responsePart.functionResponse.name,
+                                content: JSON.stringify(responsePart.functionResponse.response),
+                            });
+                            pendingToolCalls.delete(toolCallId);
+                        }
                     });
                 } else {
                     const userContent = turn.parts.map(p => p.text).join('\n');
-                    messages.push({ role: 'user', content: userContent });
+                    if (userContent.trim()) {
+                        messages.push({ role: 'user', content: userContent });
+                    }
                 }
             } else if (turn.role === 'model') {
                 const toolCalls = turn.parts
-                    .filter(p => p.functionCall)
+                    .filter(p => p.functionCall && p.functionCall.name && p.functionCall.id)
                     .map(p => ({
                         id: p.functionCall.id,
                         type: 'function',
                         function: {
                             name: p.functionCall.name,
-                            arguments: JSON.stringify(p.functionCall.args),
+                            arguments: JSON.stringify(p.functionCall.args || {}),
                         },
                     }));
 
@@ -129,15 +141,46 @@ export class OpenAIService extends BaseLLMService {
                         content: null, // As per OpenAI's spec, content is null when tool_calls is present
                         tool_calls: toolCalls
                     });
+                    // Track these tool calls for response matching
+                    toolCalls.forEach(call => {
+                        pendingToolCalls.set(call.id, call);
+                    });
                 } else {
-                    const modelContent = turn.parts.map(p => p.text).join('\n');
-                    if (modelContent) {
+                    const modelContent = turn.parts.filter(p => p.text).map(p => p.text).join('\n');
+                    if (modelContent.trim()) {
                         messages.push({ role: 'assistant', content: modelContent });
                     }
                 }
             }
         }
-        return messages;
+
+        // Clean up any orphaned tool calls by removing assistant messages with no responses
+        const cleanedMessages = [];
+        for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
+            if (msg.role === 'assistant' && msg.tool_calls) {
+                // Check if the next messages contain responses to these tool calls
+                const toolCallIds = msg.tool_calls.map(tc => tc.id);
+                let hasResponses = false;
+                for (let j = i + 1; j < messages.length; j++) {
+                    if (messages[j].role === 'tool' && toolCallIds.includes(messages[j].tool_call_id)) {
+                        hasResponses = true;
+                        break;
+                    }
+                    if (messages[j].role === 'assistant' || messages[j].role === 'user') {
+                        break; // Stop looking once we hit another turn
+                    }
+                }
+                if (hasResponses) {
+                    cleanedMessages.push(msg);
+                }
+                // If no responses, skip this assistant message with tool calls
+            } else {
+                cleanedMessages.push(msg);
+            }
+        }
+
+        return cleanedMessages;
     }
 
     _convertGeminiParamsToOpenAI(params) {

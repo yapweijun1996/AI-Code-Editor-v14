@@ -29584,9 +29584,6 @@
   "frontend/js/llm/base_llm_service.js": [
     "BaseLLMService"
   ],
-  "frontend/js/llm/gemini_service.js": [
-    "GeminiService"
-  ],
   "frontend/js/llm/service_factory.js": [
     "LLMServiceFactory"
   ]

@@ -9,13 +9,15 @@ export class GeminiService extends BaseLLMService {
         super(apiKeyManager, model);
     }
 
-    isConfigured() {
-        const currentApiKey = this.apiKeyManager.getCurrentKey('gemini');
+    async isConfigured() {
+        await this.apiKeyManager.loadKeys('gemini');
+        const currentApiKey = this.apiKeyManager.getCurrentKey();
         return !!currentApiKey;
     }
 
     async *sendMessageStream(history, tools, customRules = '') {
-        const currentApiKey = this.apiKeyManager.getCurrentKey('gemini');
+        await this.apiKeyManager.loadKeys('gemini');
+        const currentApiKey = this.apiKeyManager.getCurrentKey();
         if (!currentApiKey) {
             throw new Error("Gemini API key is not set or available.");
         }
@@ -54,7 +56,39 @@ export class GeminiService extends BaseLLMService {
 
     _prepareMessages(history) {
         // Gemini's chat history doesn't include the final message, which is sent to sendMessage.
-        return history.slice(0, -1);
+        const messages = [];
+        const historyToProcess = history.slice(0, -1);
+
+        for (const turn of historyToProcess) {
+            if (turn.role === 'user') {
+                // Split user messages: separate text from function responses
+                const textParts = turn.parts.filter(p => p.text && !p.functionResponse);
+                const functionResponses = turn.parts.filter(p => p.functionResponse);
+
+                // Add user text message if it exists
+                if (textParts.length > 0) {
+                    messages.push({
+                        role: 'user',
+                        parts: textParts
+                    });
+                }
+
+                // Add function responses as separate messages
+                functionResponses.forEach(responsePart => {
+                    messages.push({
+                        role: 'function',
+                        parts: [{
+                            functionResponse: responsePart.functionResponse
+                        }]
+                    });
+                });
+            } else if (turn.role === 'model') {
+                // Model messages can stay as-is
+                messages.push(turn);
+            }
+        }
+
+        return messages;
     }
 
     _getSystemInstruction(mode, customRules) {

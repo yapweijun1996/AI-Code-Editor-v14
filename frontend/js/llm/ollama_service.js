@@ -9,12 +9,12 @@ export class OllamaService extends BaseLLMService {
         this.customConfig = customConfig;
     }
 
-    isConfigured() {
+    async isConfigured() {
         return !!this.customConfig.baseURL && !!this.model;
     }
 
     async *sendMessageStream(history, tools, customRules) {
-        if (!this.isConfigured()) {
+        if (!(await this.isConfigured())) {
             throw new Error("Ollama base URL and model name are not set.");
         }
 

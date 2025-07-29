@@ -40,9 +40,9 @@ export class BaseLLMService {
     /**
      * Checks if the service is configured and ready to be used.
      * @abstract
-     * @returns {boolean} True if the service is configured, false otherwise.
+     * @returns {Promise<boolean>} True if the service is configured, false otherwise.
      */
-    isConfigured() {
+    async isConfigured() {
         throw new Error("Method 'isConfigured()' must be implemented.");
     }
 }
