@@ -29456,10 +29456,7 @@
     "getHighWaterMark"
   ],
   "frontend\\js\\tool_executor.js": [
-    "stripMarkdownCodeBlock",
-    "_getProjectStructure",
-    "_readFile",
-    "_readFileLines"
+    "stripMarkdownCodeBlock"
   ],
   "frontend\\index.html": [
     "#error-container",
