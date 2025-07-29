@@ -512,9 +512,12 @@ export function updateTokenDisplay(requestTokens, responseTokens) {
     const totalEl = document.getElementById('token-total');
 
     if (display && requestEl && responseEl && totalEl) {
-        requestEl.textContent = `Req: ${requestTokens}`;
-        responseEl.textContent = `Res: ${responseTokens}`;
-        totalEl.textContent = `Total: ${requestTokens + responseTokens}`;
+        const reqTokens = parseInt(requestTokens, 10) || 0;
+        const resTokens = parseInt(responseTokens, 10) || 0;
+
+        requestEl.textContent = `Req: ${reqTokens}`;
+        responseEl.textContent = `Res: ${resTokens}`;
+        totalEl.textContent = `Total: ${reqTokens + resTokens}`;
         display.style.display = 'flex';
     }
 }
