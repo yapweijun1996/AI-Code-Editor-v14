@@ -93,13 +93,6 @@ pause
 goto menu
 
 :start
-echo Ensuring backend dependencies are up to date...
-pushd backend && npm install && popd
-if %errorLevel% neq 0 (
-    echo [ERROR] Failed to install backend dependencies.
-    pause
-    goto menu
-)
 echo Starting the backend server with PM2...
 call pm2 start backend/index.js --name "%PM2_APP_NAME%"
 if %errorLevel% neq 0 (
