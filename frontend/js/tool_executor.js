@@ -19,6 +19,27 @@ function stripMarkdownCodeBlock(content) {
 
 // --- Tool Handlers ---
 
+function unescapeHtmlEntities(text) {
+    if (typeof text !== 'string') {
+        return text;
+    }
+    // Use a temporary textarea element to decode entities
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    let decoded = textarea.value;
+
+    // Additionally, handle JavaScript-style hex escapes that might not be covered
+    try {
+        decoded = decoded.replace(/\\x([0-9A-Fa-f]{2})/g, (match, p1) => {
+            return String.fromCharCode(parseInt(p1, 16));
+        });
+    } catch (e) {
+        console.error("Error decoding hex escapes", e);
+    }
+    
+    return decoded;
+}
+
 async function _getProjectStructure(params, rootHandle) {
     const ignorePatterns = await FileSystem.getIgnorePatterns(rootHandle);
     const tree = await FileSystem.buildStructureTree(rootHandle, ignorePatterns);
@@ -48,9 +69,10 @@ async function _readFile({ filename }, rootHandle) {
     }
 
     const content = await file.text();
+    const cleanContent = unescapeHtmlEntities(content);
     // There seems to be an issue with the return value being mutated.
     // Creating a new object explicitly can prevent this.
-    const result = { content: content };
+    const result = { content: cleanContent };
     return result;
 }
 

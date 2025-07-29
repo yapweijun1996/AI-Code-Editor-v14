@@ -208,10 +208,7 @@
     "TaskRunner"
   ],
   "frontend/js/tool_executor.js": [
-    "stripMarkdownCodeBlock",
-    "_getProjectStructure",
-    "_readFile",
-    "_readFileLines"
+    "stripMarkdownCodeBlock"
   ],
   "node_modules/JSONStream/index.js": [
     "setHeaderFooter",
