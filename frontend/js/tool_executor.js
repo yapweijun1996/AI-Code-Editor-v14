@@ -299,8 +299,12 @@ async function _replaceLines({ filename, start_line, end_line, new_content }, ro
     UndoManager.push(filename, originalContent);
     const lines = originalContent.split('\n');
 
-    const before = lines.slice(0, start_line - 1);
-    const after = lines.slice(end_line);
+    // Clamp the line numbers to the file's bounds
+    const clampedStart = Math.max(1, Math.min(lines.length, start_line));
+    const clampedEnd = Math.max(clampedStart, Math.min(lines.length, end_line));
+
+    const before = lines.slice(0, clampedStart - 1);
+    const after = lines.slice(clampedEnd);
     const newLines = cleanNewContent.split('\n');
 
     const updatedContent = [...before, ...newLines, ...after].join('\n');
@@ -315,7 +319,7 @@ async function _replaceLines({ filename, start_line, end_line, new_content }, ro
     await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
     document.getElementById('chat-input').focus();
 
-    return { message: `Lines ${start_line}-${end_line} in '${filename}' were replaced successfully.` };
+    return { message: `Lines ${clampedStart}-${clampedEnd} in '${filename}' were replaced successfully.` };
 }
 
 async function _applyDiff({ filename, patch_content }, rootHandle) {

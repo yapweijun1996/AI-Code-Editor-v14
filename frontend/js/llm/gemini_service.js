@@ -107,6 +107,12 @@ export class GeminiService extends BaseLLMService {
             return true;
         }
         
+        // Check for service unavailable errors (503)
+        if (errorString.includes('503') || errorString.includes('overloaded') || 
+            errorString.includes('service unavailable')) {
+            return true;
+        }
+        
         return false;
     }
 
