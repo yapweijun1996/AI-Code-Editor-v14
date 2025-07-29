@@ -37,8 +37,11 @@ export class GeminiService extends BaseLLMService {
                     tools: [tools],
                 });
 
+                const preparedHistory = this._prepareMessages(history);
+                console.log('Gemini prepared history:', JSON.stringify(preparedHistory, null, 2));
+
                 const chat = model.startChat({
-                    history: this._prepareMessages(history),
+                    history: preparedHistory,
                     safetySettings: [
                         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
                         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -48,13 +51,25 @@ export class GeminiService extends BaseLLMService {
                 });
 
                 const lastUserMessage = history[history.length - 1].parts;
+                console.log('Gemini last user message:', JSON.stringify(lastUserMessage, null, 2));
+                
                 const result = await chat.sendMessageStream(lastUserMessage);
 
-                for await (const chunk of result.stream) {
-                    yield {
-                        text: chunk.text(),
-                        functionCalls: chunk.functionCalls(),
-                    };
+                try {
+                    for await (const chunk of result.stream) {
+                        yield {
+                            text: chunk.text(),
+                            functionCalls: chunk.functionCalls(),
+                        };
+                    }
+                } catch (streamError) {
+                    console.error('Gemini streaming error:', streamError);
+                    console.error('Stream error details:', {
+                        message: streamError.message,
+                        stack: streamError.stack,
+                        name: streamError.name
+                    });
+                    throw streamError;
                 }
 
                 // If we get here, the request was successful
@@ -116,16 +131,27 @@ export class GeminiService extends BaseLLMService {
 
                 // Add function responses as separate messages
                 functionResponses.forEach(responsePart => {
-                    messages.push({
-                        role: 'function',
-                        parts: [{
-                            functionResponse: responsePart.functionResponse
-                        }]
-                    });
+                    // Validate function response structure
+                    if (responsePart.functionResponse && 
+                        responsePart.functionResponse.name && 
+                        responsePart.functionResponse.response) {
+                        messages.push({
+                            role: 'function',
+                            parts: [{
+                                functionResponse: responsePart.functionResponse
+                            }]
+                        });
+                    } else {
+                        console.warn('Invalid function response structure:', responsePart);
+                    }
                 });
             } else if (turn.role === 'model') {
-                // Model messages can stay as-is
-                messages.push(turn);
+                // Model messages can stay as-is, but validate structure
+                if (turn.parts && Array.isArray(turn.parts)) {
+                    messages.push(turn);
+                } else {
+                    console.warn('Invalid model message structure:', turn);
+                }
             }
         }
 
