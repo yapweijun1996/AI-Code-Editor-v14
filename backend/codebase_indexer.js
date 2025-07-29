@@ -3,7 +3,6 @@ const path = require('path');
 const acorn = require('acorn');
 const walk = require('acorn-walk');
 const cheerio = require('cheerio');
-const { marked } = require('marked');
 
 const projectRoot = path.join(__dirname, '..');
 const indexFilePath = path.join(__dirname, 'codebase_index.json');
@@ -72,7 +71,8 @@ function extractHtmlSymbols(content) {
     return [...symbols];
 }
 
-function extractMdSymbols(content) {
+async function extractMdSymbols(content) {
+    const { marked } = await import('marked');
     const symbols = new Set();
     const tokens = marked.lexer(content);
     tokens.forEach(token => {
@@ -96,10 +96,14 @@ const SymbolExtractors = {
  * @param {string} content - The text content of the file.
  * @returns {string[]} - A list of extracted symbol names.
  */
-function extractSymbols(filePath, content) {
+async function extractSymbols(filePath, content) {
     const extension = path.extname(filePath);
     const extractor = SymbolExtractors[extension];
-    return extractor ? extractor(content) : [];
+    if (extractor) {
+        // Handle both sync and async extractors
+        return await extractor(content);
+    }
+    return [];
 }
 
 
@@ -146,7 +150,7 @@ async function buildIndex(options = {}) {
     for (const file of files) {
         try {
             const content = await fs.readFile(file, 'utf8');
-            const symbols = extractSymbols(file, content);
+            const symbols = await extractSymbols(file, content);
             if (symbols.length > 0) {
                 const relativePath = path.relative(projectRoot, file);
                 index[relativePath] = symbols;
@@ -211,7 +215,7 @@ async function processWriteQueue() {
             if (SUPPORTED_EXTENSIONS.includes(extension)) {
                 try {
                     const content = await fs.readFile(filePath, 'utf8');
-                    const symbols = extractSymbols(filePath, content);
+                    const symbols = await extractSymbols(filePath, content);
                     if (symbols.length > 0) {
                         console.log(`[Indexer] Updating index for ${relativePath} with ${symbols.length} symbols.`);
                         index[relativePath] = symbols;
