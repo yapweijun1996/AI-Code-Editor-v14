@@ -71,6 +71,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Setup one-time UI event listeners
     UI.initializeUI();
 
+    // Clear the chat input on startup to prevent submission on reload
+    chatInput.value = '';
+
     if (appState.rootDirectoryHandle) {
         await ChatService.initialize(appState.rootDirectoryHandle);
     }
@@ -147,18 +150,6 @@ Analyze the code and provide the necessary changes to resolve these issues.
         ChatService.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
     };
 
-    const openDirectoryButton = document.getElementById('open-directory-button');
-    openDirectoryButton.addEventListener('click', async () => {
-        try {
-            const handle = await window.showDirectoryPicker();
-            appState.rootDirectoryHandle = handle;
-            await DbManager.saveDirectoryHandle(handle);
-            await UI.refreshFileTree(handle, appState.onFileSelect);
-            GeminiChat.initialize(handle);
-        } catch (error) {
-            console.error('Error opening directory:', error);
-        }
-    });
 
     initializeEventListeners(appState);
 
