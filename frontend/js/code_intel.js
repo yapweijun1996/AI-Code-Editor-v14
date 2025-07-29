@@ -46,7 +46,6 @@ export const CodebaseIndexer = {
                         const content = await file.text();
                         index.files[newPath] = {
                             definitions: this.parseFileContent(content, newPath),
-                            content: content.toLowerCase(), // Store full content for searching
                         };
                         stats.indexedFileCount++;
                     } catch (e) {
@@ -64,8 +63,8 @@ export const CodebaseIndexer = {
         const fileExtension = filePath.split('.').pop();
 
         // Generic regex for various languages
-        const functionRegex = /(?:function|def|func|fn)\s+([a-zA-Z0-9_]+)\s*\(?/g;
-        const classRegex = /class\s+([a-zA-Z0-9_]+)/g;
+        const functionRegex = /(?:function|def|func|fn)\s+([a-zA-Z0-9_<>]+)\s*\(?/g;
+        const classRegex = /class\s+([a-zA-Z0-9_<>]+)/g;
         const variableRegex = /(?:const|let|var|val|final)\s+([a-zA-Z0-9_]+)\s*=/g;
         const todoRegex = /(?:\/\/|\#|\*)\s*TODO[:\s](.*)/g;
 
@@ -125,13 +124,6 @@ export const CodebaseIndexer = {
             }
 
             // If not found in definitions, perform a general search on the file content
-            if (!foundInContent && fileData.content && fileData.content.includes(lowerCaseQuery)) {
-                 results.push({
-                    file: filePath,
-                    type: 'content-match',
-                    name: `Found '${query}' in file`,
-                });
-            }
         }
         if (results.length === 0) {
             return [{
@@ -156,7 +148,6 @@ export const CodebaseIndexer = {
                     const content = await file.text();
                     index.files[path] = {
                         definitions: this.parseFileContent(content, path),
-                        content: content.toLowerCase(),
                     };
                     stats.indexedFileCount++;
                 } catch (fileError) {

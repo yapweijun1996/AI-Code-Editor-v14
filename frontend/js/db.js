@@ -4,7 +4,6 @@ export const DbManager = {
     db: null,
     dbName: 'CodeEditorDB',
     stores: {
-        keys: 'apiKeys',
         handles: 'fileHandles',
         codeIndex: 'codeIndex',
         sessionState: 'sessionState',
@@ -24,9 +23,6 @@ export const DbManager = {
             };
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                if (!db.objectStoreNames.contains(this.stores.keys)) {
-                    db.createObjectStore(this.stores.keys, { keyPath: 'id' });
-                }
                 if (!db.objectStoreNames.contains(this.stores.handles)) {
                     db.createObjectStore(this.stores.handles, { keyPath: 'id' });
                 }
@@ -53,29 +49,6 @@ export const DbManager = {
                     db.createObjectStore(this.stores.chatHistory, { keyPath: 'id' });
                 }
             };
-        });
-    },
-    async getKeys() {
-        const db = await this.openDb();
-        return new Promise((resolve) => {
-            const request = db
-            .transaction(this.stores.keys, 'readonly')
-            .objectStore(this.stores.keys)
-            .get('userApiKeys');
-            request.onerror = () => resolve('');
-            request.onsuccess = () =>
-            resolve(request.result ? request.result.keys : '');
-        });
-    },
-    async saveKeys(keysString) {
-        const db = await this.openDb();
-        return new Promise((resolve, reject) => {
-            const request = db
-            .transaction(this.stores.keys, 'readwrite')
-            .objectStore(this.stores.keys)
-            .put({ id: 'userApiKeys', keys: keysString });
-            request.onerror = () => reject('Error saving keys.');
-            request.onsuccess = () => resolve();
         });
     },
     async saveDirectoryHandle(handle) {

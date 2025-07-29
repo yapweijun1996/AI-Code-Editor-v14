@@ -5,9 +5,7 @@ import { BaseLLMService } from './base_llm_service.js';
  */
 export class OllamaService extends BaseLLMService {
     constructor(apiKeyManager, model, customConfig = {}) {
-        // Ollama doesn't use an API key, so we pass null to the base constructor.
-        // The manager is kept for interface consistency, but not used for auth.
-        super(null, model); 
+        super(null, model);
         this.customConfig = customConfig;
     }
 

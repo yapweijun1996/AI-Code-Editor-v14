@@ -21,10 +21,12 @@ class TaskRunner {
     }
 
     runTask(taskName) {
-        // This will be implemented later.
-        // For now, it will just log the command.
-        console.log(`Running task: ${taskName}`);
-        console.log(`Command: ${this.tasks[taskName]}`);
+        const command = this.tasks[taskName];
+        if (command) {
+            ChatService.runToolDirectly('run_terminal_command', { command });
+        } else {
+            console.error(`Task not found: ${taskName}`);
+        }
     }
 }
 

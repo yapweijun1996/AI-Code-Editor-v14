@@ -9,6 +9,11 @@ export class GeminiService extends BaseLLMService {
         super(apiKeyManager, model);
     }
 
+    isConfigured() {
+        const currentApiKey = this.apiKeyManager.getCurrentKey('gemini');
+        return !!currentApiKey;
+    }
+
     async *sendMessageStream(history, tools, customRules = '') {
         const currentApiKey = this.apiKeyManager.getCurrentKey('gemini');
         if (!currentApiKey) {

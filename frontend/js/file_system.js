@@ -152,60 +152,6 @@ export async function searchInDirectory(
     }
 }
 
-async function _buildStructureTreeRecursive(dirHandle, ignorePatterns, currentPath) {
-    const children = [];
-    for await (const entry of dirHandle.values()) {
-        const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
-        if (ignorePatterns.some(pattern => newPath.startsWith(pattern.replace(/\/$/, '')))) {
-            continue;
-        }
-
-        if (entry.kind === 'directory') {
-            const childNode = {
-                name: entry.name,
-                kind: 'directory',
-                children: await _buildStructureTreeRecursive(entry, ignorePatterns, newPath)
-            };
-            children.push(childNode);
-        } else {
-            children.push({
-                name: entry.name,
-                kind: 'file'
-            });
-        }
-    }
-    // Sort
-    children.sort((a, b) => {
-        if (a.kind === 'directory' && b.kind !== 'directory') return -1;
-        if (a.kind !== 'directory' && b.kind === 'directory') return 1;
-        return a.name.localeCompare(b.name);
-    });
-    return children;
-}
-
-export async function buildStructureTree(dirHandle, ignorePatterns) {
-    const root = {
-        name: dirHandle.name,
-        kind: 'directory',
-        children: await _buildStructureTreeRecursive(dirHandle, ignorePatterns, '')
-    };
-    return root;
-}
-
-export function formatTreeToString(node, prefix = '') {
-    let result = '';
-    const children = node.children || [];
-    children.forEach((child, index) => {
-        const isLast = index === children.length - 1;
-        const connector = isLast ? '└── ' : '├── ';
-        result += `${prefix}${connector}${child.name}\n`;
-        if (child.kind === 'directory') {
-            const newPrefix = prefix + (isLast ? '    ' : '│   ');
-            result += formatTreeToString(child, newPrefix);
-        }
-    });
-    return result;
-};
 
 export const buildTree = async (dirHandle, ignorePatterns, currentPath = '') => {
     const children = [];

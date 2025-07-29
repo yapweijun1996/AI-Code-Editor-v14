@@ -1,5 +1,8 @@
 import { getFileHandleFromPath } from './file_system.js';
 import { ChatService } from './chat_service.js';
+import * as UI from './ui.js';
+
+const MONACO_CDN_PATH = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
 
 let editor;
 let openFiles = new Map(); // Key: filePath (string), Value: { handle, name, model, viewState }
@@ -59,7 +62,7 @@ export function clearEditor() {
 
 export function initializeEditor(editorContainer, tabBarContainer) {
     return new Promise((resolve) => {
-        require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+        require.config({ paths: { 'vs': MONACO_CDN_PATH } });
         require(['vs/editor/editor.main'], () => {
             monaco.editor.defineTheme('cfmlTheme', {
                 base: 'vs-dark',
@@ -190,6 +193,7 @@ export async function openFile(fileHandle, filePath, tabBarContainer, focusEdito
         await switchTab(filePath, tabBarContainer, focusEditor);
     } catch (error) {
         console.error(`Failed to open file ${filePath}:`, error);
+        UI.showError(`Failed to open file: ${error.message}`);
     }
 }
 

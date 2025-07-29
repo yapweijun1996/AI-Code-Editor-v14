@@ -6,11 +6,12 @@ export class BaseLLMService {
     /**
      * @param {string} apiKey - The API key for the service.
      */
-    constructor(apiKey) {
+    constructor(apiKeyManager, model) {
         if (this.constructor === BaseLLMService) {
             throw new Error("Abstract classes can't be instantiated.");
         }
-        this.apiKey = apiKey;
+        this.apiKeyManager = apiKeyManager;
+        this.model = model;
     }
 
     /**
@@ -34,5 +35,14 @@ export class BaseLLMService {
      */
     _prepareMessages(history) {
         throw new Error("Method '_prepareMessages()' must be implemented.");
+    }
+
+    /**
+     * Checks if the service is configured and ready to be used.
+     * @abstract
+     * @returns {boolean} True if the service is configured, false otherwise.
+     */
+    isConfigured() {
+        throw new Error("Method 'isConfigured()' must be implemented.");
     }
 }

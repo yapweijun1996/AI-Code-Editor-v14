@@ -22,7 +22,7 @@ export const ApiKeyManager = {
             }
         }
 
-        this.keys = keysString.split('\n').filter((k) => k.trim() !== '');
+        this.keys = keysString.split('\n').map(k => k.trim()).filter(Boolean);
         this.currentIndex = 0;
         this.triedKeys.clear();
         console.log(`ApiKeyManager loaded ${this.keys.length} keys for ${provider}.`);

@@ -55,9 +55,14 @@ export const Settings = {
      * @param {any} value - The value to save.
      */
     async set(key, value) {
-        this.cache.set(key, value);
-        await DbManager.saveSetting(key, value);
-        console.log(`Setting "${key}" updated to "${value}".`);
+        const valueToSave = typeof value === 'string' ? value.trim() : value;
+        this.cache.set(key, valueToSave);
+        await DbManager.saveSetting(key, valueToSave);
+        if (key.includes('apiKey')) {
+            console.log(`Setting "${key}" updated to "[REDACTED]".`);
+        } else {
+            console.log(`Setting "${key}" updated to "${value}".`);
+        }
     },
 
     /**

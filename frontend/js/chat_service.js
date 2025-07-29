@@ -166,7 +166,8 @@ export const ChatService = {
 
             } catch (error) {
                 console.error(`Error during API call with ${this.llmService.constructor.name}:`, error);
-                UI.showError(`An error occurred: ${error.message}`);
+                console.error(`Error stack:`, error.stack); // Log the stack trace
+                UI.showError(`An error occurred during AI communication: ${error.message}. Please check your API key and network connection.`);
                 functionCalls = [];
             }
         } while (functionCalls.length > 0 && !this.isCancelled);
@@ -175,6 +176,7 @@ export const ChatService = {
     },
 
     async sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, uploadedImage, clearImagePreview) {
+        console.log("Attempting to send message...");
         const userPrompt = chatInput.value.trim();
         if ((!userPrompt && !uploadedImage) || this.isSending) return;
 

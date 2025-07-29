@@ -9,6 +9,11 @@ export class OpenAIService extends BaseLLMService {
         this.apiBaseUrl = 'https://api.openai.com/v1';
     }
 
+    isConfigured() {
+        const currentApiKey = this.apiKeyManager.getCurrentKey('openai');
+        return !!currentApiKey;
+    }
+
     async *sendMessageStream(history, tools, customRules) {
         const currentApiKey = this.apiKeyManager.getCurrentKey('openai');
         if (!currentApiKey) {

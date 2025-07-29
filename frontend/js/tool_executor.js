@@ -900,7 +900,6 @@ export async function execute(toolCall, rootDirectoryHandle) {
                    resultForModel = { error: circuitBreakerMsg, feedback: 'STOP' };
                    UI.showError(circuitBreakerMsg, 10000);
                    console.error(circuitBreakerMsg);
-                   ChatService.resetErrorTracker();
                } else {
                    isSuccess = false;
                    const errorMessages = errors.map(e => `L${e.startLineNumber}: ${e.message}`).join('\n');
@@ -911,7 +910,6 @@ export async function execute(toolCall, rootDirectoryHandle) {
                    console.error(errorMessage);
                }
             } else {
-              ChatService.resetErrorTracker();
             }
         }
     }
