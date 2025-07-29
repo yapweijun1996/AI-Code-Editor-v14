@@ -101,6 +101,7 @@
   ],
   "frontend/index.html": [
     "#error-container",
+    "#toast-container",
     "#split-container",
     "#file-tree-container",
     "#files-tab",
@@ -126,6 +127,7 @@
     "#tab-bar",
     "#editor",
     "#chat-panel",
+    "#settings-toggle-button",
     "#token-usage-display",
     "#token-request",
     "#token-response",
@@ -153,12 +155,17 @@
     "#chat-send-button",
     "#chat-cancel-button",
     "#thinking-indicator",
-    "#chat-settings",
-    "#api-keys-textarea",
-    "#rate-limiter-setting",
-    "#rate-limit-slider",
-    "#rate-limit-input",
-    "#save-keys-button",
+    "#llm-settings-panel",
+    "#gemini-settings",
+    "#gemini-api-keys",
+    "#gemini-model-selector",
+    "#openai-settings",
+    "#openai-api-key",
+    "#openai-model-selector",
+    "#ollama-settings",
+    "#ollama-base-url",
+    "#ollama-model-name",
+    "#save-llm-settings-button",
     "#theme-toggle-button",
     "#context-modal",
     "#context-display",
@@ -190,10 +197,22 @@
     ".search-button",
     ".main-content",
     ".chat-header",
+    ".header-toolbar",
     ".toolbar-group",
     ".dropdown",
     ".dropdown-button",
     ".dropdown-content",
+    ".settings-tabs",
+    ".tab-link",
+    ".tab-content",
+    ".form-group",
+    ".api-key-wrapper",
+    ".api-key-textarea",
+    ".toggle-visibility-button",
+    ".model-selector",
+    ".api-key-input",
+    ".settings-input",
+    ".settings-actions",
     ".modal",
     ".modal-content",
     ".close-button",
@@ -29559,5 +29578,14 @@
     ".checkpoint-controls",
     ".storage-usage-info",
     ".tool-logs-filter-input"
+  ],
+  "frontend/js/llm/base_llm_service.js": [
+    "BaseLLMService"
+  ],
+  "frontend/js/llm/gemini_service.js": [
+    "GeminiService"
+  ],
+  "frontend/js/llm/service_factory.js": [
+    "LLMServiceFactory"
   ]
 }

@@ -1,5 +1,5 @@
-import { ApiKeyManager } from './api_manager.js';
-import { DbManager } from './db.js';
+import { LLMServiceFactory } from './llm/service_factory.js';
+import { Settings } from './settings.js';
 import { CodebaseIndexer } from './code_intel.js';
 import * as FileSystem from './file_system.js';
 import * as ToolExecutor from './tool_executor.js';
@@ -9,278 +9,55 @@ import * as UI from './ui.js';
 export const GeminiChat = {
     isSending: false,
     isCancelled: false,
-    chatSession: null,
-    model: null,
-    activeModelName: '',
-    activeMode: '',
-    lastRequestTime: 0,
-    rateLimit: 5000,
+    llmService: null,
     rootDirectoryHandle: null,
-   errorTracker: {
-       filePath: null,
-       errorSignature: null,
-       count: 0,
-   },
+    errorTracker: {
+        filePath: null,
+        errorSignature: null,
+        count: 0,
+    },
 
     async initialize(rootDirectoryHandle) {
         this.rootDirectoryHandle = rootDirectoryHandle;
+        await this._initializeLLMService();
 
-        const savedModel = await DbManager.getSetting('selectedModel');
-        const modelSelector = document.getElementById('model-selector');
-        if (savedModel && modelSelector) {
-            modelSelector.value = savedModel;
-        }
-
-        const savedMode = await DbManager.getSetting('selectedMode');
-        const modeSelector = document.getElementById('agent-mode-selector');
-        if (savedMode && modeSelector) {
-            modeSelector.value = savedMode;
-        }
-
-        const chatHistory = await DbManager.getChatHistory();
+        const chatHistory = await Settings.getChatHistory();
         if (chatHistory.length > 0) {
-            console.log(`[Chat History] Found ${chatHistory.length} messages in IndexedDB.`);
+            console.log(`[Chat History] Found ${chatHistory.length} messages.`);
             const chatMessages = document.getElementById('chat-messages');
             UI.renderChatHistory(chatMessages, chatHistory);
-            await this._startChat(chatHistory);
         }
+    },
+
+    async _initializeLLMService() {
+        const llmSettings = Settings.getLLMSettings();
+        this.llmService = LLMServiceFactory.create(llmSettings.provider, llmSettings);
+        console.log(`LLM Service initialized with provider: ${llmSettings.provider}`);
     },
 
     async _startChat(history = []) {
+        // This method will now be simpler. The complex setup (prompts, tools)
+        // will be handled by the specific LLMService implementation.
+        // For now, we just ensure the service is ready.
+        if (!this.llmService || !this.llmService.isConfigured()) {
+            console.warn("LLM service not configured. Chat will not start. Please configure settings.");
+            return;
+        }
+
         try {
-            const apiKey = ApiKeyManager.getCurrentKey();
-            if (!apiKey) {
-                throw new Error('No API key provided. Please add one in the settings.');
-            }
-
-            const genAI = new window.GoogleGenerativeAI(apiKey);
-            const modelName = document.getElementById('model-selector').value;
+            // The actual chat session object might be managed within the LLMService
+            // or we can still store it here. For now, we'll assume the service
+            // manages its own state and this method just signals readiness.
             const mode = document.getElementById('agent-mode-selector').value;
-
-            await DbManager.saveSetting('selectedModel', modelName);
             await DbManager.saveSetting('selectedMode', mode);
-
-            const baseTools = {
-                functionDeclarations: [
-                    { name: 'create_file', description: "Creates a new file. CRITICAL: Do NOT include the root directory name in the path. Example: To create 'app.js' in the root, the path is 'app.js', NOT 'my-project/app.js'.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, content: { type: 'STRING', description: 'The raw text content of the file. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'content'] } },
-                    { name: 'delete_file', description: "Deletes a file. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
-                    { name: 'create_folder', description: "Creates a new folder. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { folder_path: { type: 'STRING' } }, required: ['folder_path'] } },
-                    { name: 'delete_folder', description: "Deletes a folder and all its contents. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { folder_path: { type: 'STRING' } }, required: ['folder_path'] } },
-                    { name: 'rename_folder', description: "Renames a folder. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { old_folder_path: { type: 'STRING' }, new_folder_path: { type: 'STRING' } }, required: ['old_folder_path', 'new_folder_path'] } },
-                    { name: 'rename_file', description: "Renames a file. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { old_path: { type: 'STRING' }, new_path: { type: 'STRING' } }, required: ['old_path', 'new_path'] } },
-                    { name: 'read_file', description: "Reads a file's content. CRITICAL: Do NOT include the root directory name in the path. Example: To read 'src/app.js', the path is 'src/app.js'.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
-                    { name: 'read_multiple_files', description: "Reads and concatenates the content of multiple files. Essential for multi-file context tasks.", parameters: { type: 'OBJECT', properties: { filenames: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['filenames'] } },
-                    { name: 'read_file_lines', description: 'Reads a specific range of lines from a file. Use this for large files.', parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, start_line: { type: 'NUMBER' }, end_line: { type: 'NUMBER' } }, required: ['filename', 'start_line', 'end_line'] } },
-                    { name: 'search_in_file', description: 'Searches for a pattern in a file and returns matching lines. Use this for large files.', parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, pattern: { type: 'STRING' }, context: { type: 'NUMBER' } }, required: ['filename', 'pattern'] } },
-                    { name: 'read_url', description: 'Reads and extracts the main content and all links from a given URL. The result will be a JSON object with "content" and "links" properties.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING' } }, required: ['url'] } },
-                    { name: 'get_open_file_content', description: 'Gets the content of the currently open file in the editor.' },
-                    { name: 'get_selected_text', description: 'Gets the text currently selected by the user in the editor.' },
-                    { name: 'replace_selected_text', description: 'Replaces the currently selected text in the editor with new text.', parameters: { type: 'OBJECT', properties: { new_text: { type: 'STRING', description: 'The raw text to replace the selection with. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['new_text'] } },
-                    { name: 'get_project_structure', description: 'Gets the entire file and folder structure of the project. CRITICAL: Always use this tool before attempting to read or create a file to ensure you have the correct file path.' },
-                    { name: 'duckduckgo_search', description: 'Performs a search using DuckDuckGo and returns the results.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
-                    { name: 'search_code', description: 'Searches for a specific string in all files in the project (like grep).', parameters: { type: 'OBJECT', properties: { search_term: { type: 'STRING' } }, required: ['search_term'] } },
-                    { name: 'run_terminal_command', description: 'Executes a shell command on the backend and returns the output.', parameters: { type: 'OBJECT', properties: { command: { type: 'STRING' } }, required: ['command'] } },
-                    { name: 'build_or_update_codebase_index', description: 'Scans the entire codebase to build a searchable index. Slow, run once per session.' },
-                    { name: 'query_codebase', description: 'Searches the pre-built codebase index.', parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] } },
-                    { name: 'get_file_history', description: "Gets a file's git history. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
-                    { name: 'insert_content', description: "Inserts content at a specific line number in a file. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, line_number: { type: 'NUMBER' }, content: { type: 'STRING', description: 'The raw text content to insert. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'line_number', 'content'] } },
-                    { name: 'create_and_apply_diff', description: "Efficiently modifies a file by generating and applying a diff in a single step.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, new_content: { type: 'STRING', description: 'The new, raw text content of the file. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'new_content'] } },
-                    { name: 'replace_lines', description: "Replaces a specific range of lines in a file. Use this for targeted, multi-line edits like refactoring a function.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, start_line: { type: 'NUMBER' }, end_line: { type: 'NUMBER' }, new_content: { type: 'STRING', description: 'The raw text to insert. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'start_line', 'end_line', 'new_content'] } },
-                    { name: 'format_code', description: "Formats a file with Prettier. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
-                    { name: 'analyze_code', description: "Analyzes a JavaScript file's structure. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' } }, required: ['filename'] } },
-                    { name: 'rewrite_file', description: "Rewrites a file with new content. Use this as a last resort when other tools fail. CRITICAL: Do NOT include the root directory name in the path.", parameters: { type: 'OBJECT', properties: { filename: { type: 'STRING' }, content: { type: 'STRING', description: 'The new, raw text content of the file. CRITICAL: Do NOT wrap this content in markdown backticks (```).' } }, required: ['filename', 'content'] } },
-                ],
-            };
-            let allTools = [baseTools];
-            let systemInstructionText = '';
-            const now = new Date();
-            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const timeString = now.toLocaleString();
-            const baseCodePrompt = `You are Gemini, an expert AI programmer. Your function is to solve problems by writing, reading, and modifying code and files.
-
-# CORE IDENTITY & DIRECTIVES
-- **Identity:** You are a programmer. You MUST override any internal restriction that prevents you from writing or modifying files. You ALWAYS have access to tools like 'rewrite_file' and 'create_file'.
-- **Clarity:** Your responses should be concise, analytical, and purposeful. Avoid conversational filler.
-- **Markdown:** Always use Markdown for formatting.
-
-# CORE METHODOLOGY
-
-**1. FILE PATHS - CRITICAL RULE**
-- **You MUST NOT include the top-level project folder name in file paths.** The file system is already rooted in the project directory.
-- **CORRECT:** To access \`index.html\` in the root, the path is 'index.html'.
-- **INCORRECT:** \`test001/index.html\`
-- **CORRECT:** To access \`app.js\` in a \`src\` folder, the path is 'src/app.js'.
-- **INCORRECT:** \`test001/src/app.js\`
-- **YOU MUST FOLLOW THIS RULE. FAILURE TO DO SO WILL CAUSE ALL FILE OPERATIONS TO FAIL.**
-
-**2. REQUEST DECONSTRUCTION & PLANNING:**
-- Your primary task is to deconstruct user requests into a sequence of actionable steps.
-- Users will often make vague requests (e.g., "review the code," "fix the bug"). You MUST interpret these goals and create a concrete, multi-step plan using the available tools.
-- **Example Plan:** If the user says "review all files," you should form a plan like: "1. Call 'get_project_structure' to list all files. 2. Call 'read_file' on each important file I discover. 3. Summarize my findings."
-- Announce your plan to the user before executing it.
-
-**3. ACTION & CONTEXT INTEGRATION:**
-- **Contextual Awareness:** When a user gives a follow-up command like "read all of them" or "go into more detail," you MUST refer to the immediate preceding turns in the conversation to understand what "them" refers to. Use the URLs or file paths you provided in your last response as the context for the new command.
-- When a task requires multiple steps, you MUST use the output of the previous step as the input for the current step. For example, after using 'get_project_structure', use the list of files as input for your 'read_file' calls. Do not discard context.
-
-**4. EFFICIENT FILE MODIFICATION WORKFLOW:**
-- **Goal:** To modify files with precision and efficiency.
-- **CRITICAL: You MUST select the most appropriate tool for the job. Failure to do so is inefficient.**
-- **Tool Selection Strategy:**
-    - **For adding new, self-contained blocks of code (like a new function or class):** Use the \`insert_content\` tool. Specify the line number where the new code should be added. This avoids rewriting the entire file.
-    - **For replacing a specific, small section of code that is visible in the editor:** Use the \`replace_selected_text\` tool. Ask the user to select the text first if necessary.
-    - **For replacing a specific range of lines (e.g., an entire function):** Use the \`replace_lines\` tool. This is more precise than a full-file diff.
-    - **For large files that cannot be read in full:**
-        1.  **SEARCH:** Use \`search_in_file\` to find the line numbers of the code you want to change.
-        2.  **READ:** Use \`read_file_lines\` to read the specific section you need to inspect.
-        3.  **MODIFY:** Use \`replace_lines\` or \`insert_content\` with the line numbers you found.
-    - **For complex or multi-location changes in normal-sized files:** Default to the safe, full-file modification process:
-        1.  **READ:** Use \`read_file\` to get the complete, current file content.
-        2.  **MODIFY IN MEMORY:** Construct the new, full version of the file content.
-        3.  **APPLY:** Call \`create_and_apply_diff\` with the **ENTIRE, MODIFIED FILE CONTENT**.
-    - **As a last resort (e.g., if diffing fails or for very large files):** Use the \`rewrite_file\` tool.
-- **Example (Surgical Insert):** To add a new CSS class, use \`insert_content\` at the appropriate line in the CSS file.
-- **Example (Full Modify):** To rename a variable that appears in 20 places, use the READ -> MODIFY -> APPLY workflow with \`create_and_apply_diff\`.
-
-**5. AMENDMENT POLICY - CRITICAL COMPANY RULE**
-- **You MUST follow this company policy for all file edits.**
-- **DO NOT DELETE OR REPLACE CODE.** Instead, comment out the original code block.
-- **WRAP NEW CODE** with clear markers:
-    - Start of your edit: \`<!--- Edited by AI [start] --->\`
-    - End of your edit: \`<!--- Edited by AI [end] --->\`
-- **Example:**
-    \`\`\`
-    // <!--- Edited by AI [start] --->
-    // new code line 1
-    // new code line 2
-    // <!--- Edited by AI [end] --->
-    /*
-    original code line 1
-    original code line 2
-    */
-    \`\`\`
-
-**5. POST-TOOL ANALYSIS:**
-- After a tool executes, you MUST provide a thoughtful, analytical response.
-- **Summarize:** Briefly explain the outcome of the tool command.
-- **Analyze:** Explain what the result means in the context of your plan.
-- **Next Action:** State what you will do next and then call the appropriate tool.
-
-**6. URL HANDLING & RESEARCH:**
-- **URL Construction Rule:** When you discover relative URLs (e.g., '/path/to/page'), you MUST convert them to absolute URLs by correctly combining them with the base URL of the source page. CRITICAL: Ensure you do not introduce errors like double slashes ('//') or invalid characters ('.com./').
-- **Autonomous Deep Dive:** When you read a URL and it contains more links, you must autonomously select the single most relevant link to continue the research. State your choice and proceed when commanded. Do not ask the user which link to choose.
-- **CRITICAL: Proactive URL Reading from Search:** After a \`duckduckgo_search\`, you MUST analyze the search results. If a result appears relevant, you MUST immediately and proactively use the \`read_url\` tool on that URL to gather more details. This is not optional. Do not ask for permission.
-
-**6. MULTI-URL GATHERING:**
-- If a user asks you to read multiple URLs (e.g., "read all related URLs," "get information from these links"), you MUST use the \`read_url\` tool for each URL you have identified in the conversation.
-- After gathering data from all URLs, synthesize the information into a single, cohesive response.
-**7. SYNTHESIS & REPORTING:**
-- Your final output is not just data, but insight. After gathering information using tools, you MUST synthesize it.
-- **Comprehensive Answers:** Do not give short or superficial answers. Combine information from multiple sources (\`read_file\`, \`read_url\`, etc.) into a detailed, well-structured response.
-- **Analysis:** Explain what the information means. Identify key facts, draw connections, and provide a comprehensive overview. If asked for a "breakdown" or "detailed analysis," you are expected to generate a substantial, long-form response (e.g., 500-1000 words) if the gathered data supports it.
-`;
-            
-            const newPlanPrompt = `You are a Senior AI Research Analyst. Your purpose is to provide users with well-researched, data-driven strategic advice.
-
-# CORE METHODOLOGY
-1.  **Deconstruct the Request:** Identify the core questions and objectives in the user's prompt.
-2.  **Aggressive Research:** You MUST use the Google Search tool to gather external information. Do not rely on your internal knowledge. Your credibility depends on fresh, verifiable data.
-3.  **Synthesize & Strategize:** Analyze the search results to identify key insights, trends, and data points. Use this synthesis to construct a strategic plan or report.
-4.  **Structured Reporting:** Present your findings in a professional markdown format. Your report should include:
-    - An **Executive Summary** at the top.
-    - Clear sections with headings.
-    - **Actionable Steps** or recommendations.
-    - Use of **Mermaid diagrams** for visualization where appropriate.
-    - A **"References"** section at the end, citing all sources used.
-5.  **Focus:** Your role is strategic planning, not implementation. Avoid writing functional code.
-
-# COMMUNICATION PROTOCOL
-- After a tool runs, you MUST respond to the user with a summary of the action and its result.
-- Do not call another tool without providing an intermediary text response to the user.
-
-**Current user context:**
-- Current Time: ${timeString}
-- Timezone: ${timeZone}`;
-
-            if (mode === 'plan') {
-                allTools = [
-                    { urlContext: {} },
-                    { googleSearch: {}},
-                ];
-                systemInstructionText = newPlanPrompt;
-            } else {
-                systemInstructionText = baseCodePrompt;
-            }
-
-            const customRule = await DbManager.getCustomRule(mode);
-            if (customRule) {
-                systemInstructionText += `\n\n# USER-DEFINED RULES\n${customRule}`;
-            }
-
-            const model = genAI.getGenerativeModel({
-                model: modelName,
-                systemInstruction: { parts: [{ text: systemInstructionText }] },
-                tools: allTools,
-            });
-
-            this.model = model;
-            this.chatSession = model.startChat({
-                history: history,
-                safetySettings: [
-                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                ],
-            });
-
-            this.activeModelName = modelName;
             this.activeMode = mode;
-            console.log(`New chat session started with model: ${modelName}, mode: ${mode}, and ${history.length} history parts.`);
+            console.log(`Chat ready to start with provider: ${this.llmService.constructor.name}, mode: ${mode}`);
         } catch (error) {
-            console.error('Failed to start chat session:', error);
-            UI.showError(`Error: Could not start chat session. ${error.message}`);
+            console.error('Failed to start chat:', error);
+            UI.showError(`Error: Could not start chat. ${error.message}`);
         }
     },
 
-    async _restartSessionWithHistory(history = []) {
-        console.log('Restarting session with history preservation...');
-        
-        const chatMessages = document.getElementById('chat-messages');
-        chatMessages.innerHTML = ''; // Clear the chat window first
-
-        await this._startChat(history);
-
-        const mode = document.getElementById('agent-mode-selector').value;
-        const modeName = document.getElementById('agent-mode-selector').options[document.getElementById('agent-mode-selector').selectedIndex].text;
-        
-        const defaultRules = {
-            code: `
-- Always write clean, modular, and well-documented code.
-- Follow the existing coding style and conventions of the project.
-- When modifying a file, first read it carefully to understand the context.
-- Provide clear explanations for any code changes you make.
-- When you create a file, make sure it is placed in the correct directory.
-            `.trim(),
-            plan: `
-- Always start by creating a clear, step-by-step research plan.
-- Cite all sources and provide links in a 'References' section.
-- Synthesize information from multiple sources to provide a comprehensive answer.
-- Present findings in a structured format, using headings, lists, and Mermaid diagrams where appropriate.
-- Distinguish between facts from sources and your own analysis.
-            `.trim(),
-        };
-
-        let rules = await DbManager.getCustomRule(mode);
-        if (rules === null) {
-            rules = defaultRules[mode] || '';
-        }
-        
-        UI.displayRules(chatMessages, rules, modeName);
-        UI.renderChatHistory(chatMessages, history);
-        
-        console.log(`Session re-initialized with ${history.length} history parts.`);
-    },
 
 
     _updateUiState(isSending) {
@@ -332,141 +109,69 @@ export const GeminiChat = {
     },
 
     async _performApiCall(initialParts, chatMessages) {
-        let promptParts = initialParts;
-        let running = true;
-        let turnCounter = 0;
-        ApiKeyManager.resetTriedKeys();
+        if (!this.llmService) {
+            UI.showError("LLM Service is not initialized. Please check your settings.");
+            return;
+        }
 
-        while (running && !this.isCancelled) {
-            turnCounter++;
-            const modelName = document.getElementById('model-selector').value;
-            console.group(`[AI Turn #${turnCounter}]`);
+        const history = await Settings.getChatHistory();
+        history.push({ role: 'user', parts: initialParts });
 
+        let functionCalls;
+        do {
             try {
-                console.log(`[Attempting to send with key index: ${ApiKeyManager.currentIndex}, model: ${modelName}]`);
-                console.log('[Sending promptParts]:', JSON.parse(JSON.stringify(promptParts)));
+                const mode = document.getElementById('agent-mode-selector').value;
+                const customRules = Settings.get(`custom.${mode}.rules`);
+                const tools = ToolExecutor.getToolDefinitions();
+                const stream = this.llmService.sendMessageStream(history, tools, customRules);
 
+                let modelResponseText = '';
+                functionCalls = []; // Reset for this iteration
 
-                if (!this.model) throw new Error('Model not initialized for token counting.');
-                const requestTokenResult = await this.model.countTokens({ contents: [{ role: 'user', parts: promptParts }] });
+                for await (const chunk of stream) {
+                    if (this.isCancelled) return;
 
-                const result = await this.chatSession.sendMessageStream(promptParts);
-                console.log('[sendMessageStream] request sent.');
-
-                let fullResponseText = '';
-                let functionCalls = [];
-
-                console.groupCollapsed('[Streaming Response...]');
-                for await (const chunk of result.stream) {
-                    if (this.isCancelled) break;
-                    
-                    const chunkText = chunk.text();
-                    if (chunkText) {
-                        console.log('  - Text chunk received:', chunkText);
-                        fullResponseText += chunkText;
-                        UI.appendMessage(chatMessages, fullResponseText, 'ai', true);
+                    if (chunk.text) {
+                        modelResponseText += chunk.text;
+                        UI.appendMessage(chatMessages, modelResponseText, 'ai', true);
                     }
-                    
-                    const chunkFunctionCalls = chunk.functionCalls();
-                    if (chunkFunctionCalls && chunkFunctionCalls.length > 0) {
-                        console.log('  - Function call chunk received:', chunkFunctionCalls);
-                        const hasValidCall = chunkFunctionCalls.some(call => call && call.name && typeof call.name === 'string');
-                        if (hasValidCall) {
-                            functionCalls.push(...chunkFunctionCalls);
-                        }
+                    if (chunk.functionCalls) {
+                        functionCalls.push(...chunk.functionCalls);
                     }
                 }
-                console.groupEnd();
 
-                if (this.isCancelled) {
-                    console.log('[Stream cancelled by user.]');
-                    break;
+                const modelResponseParts = [];
+                if (modelResponseText) modelResponseParts.push({ text: modelResponseText });
+                if (functionCalls.length > 0) {
+                    functionCalls.forEach(fc => modelResponseParts.push({ functionCall: fc }));
                 }
-                
-                console.log('[Stream finished.]');
-                console.log('[Final accumulated text]:', fullResponseText);
-                console.log('[Final accumulated function calls]:', JSON.parse(JSON.stringify(functionCalls)));
 
-
-                const responseTokenResult = await this.model.countTokens({
-                    contents: [{ role: 'model', parts: [{ text: fullResponseText }] }],
-                });
-                UI.updateTokenDisplay(requestTokenResult.totalTokens, responseTokenResult.totalTokens);
+                if (modelResponseParts.length > 0) {
+                    history.push({ role: 'model', parts: modelResponseParts });
+                }
 
                 if (functionCalls.length > 0) {
-                    console.groupCollapsed(`[Executing ${functionCalls.length} Tool(s)]`);
                     const toolResults = [];
                     for (const call of functionCalls) {
-                        if (this.isCancelled) break;
-                        console.log(` -> Executing tool: ${call.name} with args:`, call.args);
+                        if (this.isCancelled) return;
                         const result = await ToolExecutor.execute(call, this.rootDirectoryHandle);
-                        console.log(` <- Tool result for ${call.name}:`, result);
-                        toolResults.push(result);
+                        toolResults.push({
+                            id: call.id,
+                            name: result.toolResponse.name,
+                            response: result.toolResponse.response,
+                        });
                     }
-                    console.groupEnd();
-
-                    if (this.isCancelled) {
-                         console.log('[Tool execution cancelled by user.]');
-                        break;
-                    }
-
-                    promptParts = toolResults.map((toolResult) => {
-                        const MAX_CONTENT_LENGTH = 100000; // 100k chars
-                        let response = toolResult.toolResponse.response;
-
-                        if (response && typeof response.content === 'string' && response.content.length > MAX_CONTENT_LENGTH) {
-                            console.warn(`Tool response content for '${toolResult.toolResponse.name}' is too long (${response.content.length} chars). Truncating to ${MAX_CONTENT_LENGTH}.`);
-                            response = {
-                                ...response,
-                                content: response.content.substring(0, MAX_CONTENT_LENGTH) + "\n\n... (Content truncated due to size) ...",
-                                truncated: true
-                            };
-                        }
-
-                        return {
-                            functionResponse: {
-                                name: toolResult.toolResponse.name,
-                                response: response,
-                            },
-                        };
-                    });
-                     console.log('[Finished processing tool results. Looping back to send to model.]');
-                } else {
-                    running = false; // End the loop if there are no more function calls
-                     console.log('[No function calls in response. Ending turn.]');
-                    if (!fullResponseText) {
-                        console.groupCollapsed('[Empty Response Debug Info]');
-                        console.error("The AI model returned an empty text response and no function calls. This can happen if the model's safety filters were triggered or if there was an issue with processing the tool output from the previous turn.");
-                        console.log("Last promptParts sent to model:", JSON.parse(JSON.stringify(initialParts)));
-                        console.groupEnd();
-                        const errorMsg = 'The AI model returned an empty response. This might be due to a tool\'s output or a safety filter. Check the console for details.';
-                        UI.showError(errorMsg);
-                    }
-                    const fullHistory = await this.chatSession.getHistory();
-                    await DbManager.saveChatHistory(fullHistory);
+                    history.push({ role: 'user', parts: toolResults.map(functionResponse => ({ functionResponse })) });
                 }
+
             } catch (error) {
-                console.error('An error occurred during the AI turn:', error);
-                ApiKeyManager.rotateKey();
-
-                if (ApiKeyManager.hasTriedAllKeys()) {
-                    const errorMsg = 'All API keys failed. Please check your keys in the settings.';
-                    UI.showError(errorMsg);
-                    console.error(errorMsg);
-                    running = false;
-                } else {
-                    const delay = this.rateLimit;
-                    const errorMsg = `API key failed. Waiting for ${Math.ceil(delay / 1000)}s before retrying...`;
-                    UI.showError(errorMsg, delay);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    const history = this.chatSession ? await this.chatSession.getHistory() : [];
-                    await this._restartSessionWithHistory(history);
-                    this.lastRequestTime = Date.now();
-                }
-            } finally {
-                console.groupEnd(); // End of AI Turn group
+                console.error(`Error during API call with ${this.llmService.constructor.name}:`, error);
+                UI.showError(`An error occurred: ${error.message}`);
+                functionCalls = [];
             }
-        }
+        } while (functionCalls.length > 0 && !this.isCancelled);
+
+        await Settings.saveChatHistory(history);
     },
 
     async sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, uploadedImage, clearImagePreview) {
@@ -476,12 +181,8 @@ export const GeminiChat = {
        // If this is a new, user-initiated prompt, reset the error tracker.
        this.resetErrorTracker();
 
-        // Restart session to apply latest custom rules
-        const historyToPreserve = this.chatSession ? await this.chatSession.getHistory() : [];
-        await this._restartSessionWithHistory(historyToPreserve);
-
-        if (!this.chatSession) {
-            UI.showError('Could not start chat session.');
+        if (!this.llmService) {
+            UI.showError("LLM Service is not configured. Please check your settings.");
             return;
         }
 
@@ -517,18 +218,13 @@ export const GeminiChat = {
     async clearHistory(chatMessages) {
         chatMessages.innerHTML = '';
         UI.appendMessage(chatMessages, 'Conversation history cleared.', 'ai');
-        await DbManager.clearChatHistory();
-        await this._startChat();
+        await Settings.clearChatHistory();
+        await this._initializeLLMService();
     },
 
     async condenseHistory(chatMessages) {
-        if (!this.chatSession) {
-            UI.appendMessage(chatMessages, 'No active session to condense.', 'ai');
-            return;
-        }
-
         UI.appendMessage(chatMessages, 'Condensing history... This will start a new session.', 'ai');
-        const history = await this.chatSession.getHistory();
+        const history = await Settings.getChatHistory();
         if (history.length === 0) {
             UI.appendMessage(chatMessages, 'History is already empty.', 'ai');
             return;
@@ -536,10 +232,17 @@ export const GeminiChat = {
 
         const condensationPrompt =
             "Please summarize our conversation so far in a concise way. Include all critical decisions, file modifications, and key insights. The goal is to reduce the context size while retaining the essential information for our ongoing task. Start the summary with 'Here is a summary of our conversation so far:'.";
-
-        const result = await this.chatSession.sendMessage(condensationPrompt);
-        const summaryText = result.response.text();
-
+        
+        // This needs to be a one-off call, not part of the main loop
+        const condensationHistory = history.concat([{ role: 'user', parts: [{ text: condensationPrompt }] }]);
+        const stream = this.llmService.sendMessageStream(condensationHistory, [], ''); // No tools, no custom rules for summary
+        let summaryText = '';
+        for await (const chunk of stream) {
+            if (chunk.text) {
+                summaryText += chunk.text;
+            }
+        }
+        
         chatMessages.innerHTML = '';
         UI.appendMessage(chatMessages, 'Original conversation history has been condensed.', 'ai');
         UI.appendMessage(chatMessages, summaryText, 'ai');
@@ -548,10 +251,7 @@ export const GeminiChat = {
     },
 
     async viewHistory() {
-        if (!this.chatSession) {
-            return '[]';
-        }
-        const history = await this.chatSession.getHistory();
+        const history = await Settings.getChatHistory();
         return JSON.stringify(history, null, 2);
     },
 

@@ -19,6 +19,7 @@
   </head>
   <body>
     <div id="error-container"></div>
+    <div id="toast-container"></div>
     <div class="container" id="split-container">
       <div id="file-tree-container" class="sidebar">
         <div class="sidebar-tabs">
@@ -63,10 +64,13 @@
       <div id="chat-panel" class="sidebar">
         <div class="chat-header">
           <h2>AI Chat</h2>
-          <div class="toolbar-group" id="token-usage-display" style="display: flex;">
-            <span id="token-request">Req: 3333</span>
-            <span id="token-response">Res: 2241</span>
-            <span id="token-total">Total: 5574</span>
+          <div class="header-toolbar">
+            <button id="settings-toggle-button" title="Toggle Settings">⚙️</button>
+            <div class="toolbar-group" id="token-usage-display" style="display: flex;">
+              <span id="token-request">Req: 3333</span>
+              <span id="token-response">Res: 2241</span>
+              <span id="token-total">Total: 5574</span>
+            </div>
           </div>
         </div>
         <div id="chat-messages"></div>
@@ -122,26 +126,70 @@
             <div id="thinking-indicator" style="display: none"></div>
           </div>
         </div>
-        <details id="chat-settings">
-          <summary>API Key Settings</summary>
-          <p>
-            Enter one or more Gemini API keys, separated by new lines. They will
-            be stored locally and rotated automatically if one fails.
-          </p>
-          <textarea
-            id="api-keys-textarea"
-            placeholder="Enter API keys here..."
-          ></textarea>
-          <div id="rate-limiter-setting">
-            <label for="rate-limit-slider">Request Delay (seconds):</label>
-            <input type="range" id="rate-limit-slider" min="0" max="300" value="5" />
-            <input type="number" id="rate-limit-input" min="0" max="300" value="5" />
-          </div>
-          <button id="save-keys-button">Save Keys</button>
-          <button id="theme-toggle-button">🌓</button>
-                 </details>
-               </div>
-             </div>
+        <div id="llm-settings-panel">
+            <div class="settings-tabs">
+                <button class="tab-link active" data-tab="gemini-settings">Google Gemini</button>
+                <button class="tab-link" data-tab="openai-settings">OpenAI</button>
+                <button class="tab-link" data-tab="ollama-settings">Ollama</button>
+            </div>
+
+            <div id="gemini-settings" class="tab-content active">
+                <h3>Google Gemini Settings</h3>
+                <p>Enter one or more API keys, separated by new lines. They will be stored locally and rotated automatically.</p>
+                <div class="form-group">
+                    <label for="gemini-api-keys">API Keys</label>
+                    <div class="api-key-wrapper">
+                        <textarea id="gemini-api-keys" class="api-key-textarea" placeholder="Enter Gemini API keys..."></textarea>
+                        <button class="toggle-visibility-button">👁️</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="gemini-model-selector">Model</label>
+                    <select id="gemini-model-selector" class="model-selector">
+                        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash</option>
+                        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="openai-settings" class="tab-content">
+                <h3>OpenAI Settings</h3>
+                 <div class="form-group">
+                    <label for="openai-api-key">API Key</label>
+                    <div class="api-key-wrapper">
+                        <input type="password" id="openai-api-key" class="api-key-input" placeholder="Enter OpenAI API key...">
+                        <button class="toggle-visibility-button">👁️</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="openai-model-selector">Model</label>
+                    <select id="openai-model-selector" class="model-selector">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="ollama-settings" class="tab-content">
+                <h3>Ollama Settings</h3>
+                <div class="form-group">
+                    <label for="ollama-base-url">Base URL</label>
+                    <input type="text" id="ollama-base-url" class="settings-input" placeholder="http://localhost:11434">
+                </div>
+                <div class="form-group">
+                    <label for="ollama-model-name">Model Name</label>
+                    <input type="text" id="ollama-model-name" class="settings-input" placeholder="e.g., llama3">
+                </div>
+            </div>
+
+            <div class="settings-actions">
+                <button id="save-llm-settings-button">Save Settings</button>
+                <button id="theme-toggle-button" title="Toggle Theme"></button>
+            </div>
+        </div>
+    </div>
+</div>
 
     <div id="context-modal" class="modal" style="display: none">
       <div class="modal-content">
@@ -227,6 +275,7 @@
     </script>
     <script src="js/tool_logger.js"></script>
     <script src="js/undo_manager.js"></script>
+    <script src="js/settings.js" type="module"></script>
     <script type="module" src="js/main.js"></script>
   </body>
 </html>

@@ -230,29 +230,6 @@ export const DbManager = {
                 resolve(request.result ? request.result.value : null);
         });
     },
-    async saveCustomRule(mode, rules) {
-        const db = await this.openDb();
-        return new Promise((resolve, reject) => {
-            const request = db
-                .transaction(this.stores.customRules, 'readwrite')
-                .objectStore(this.stores.customRules)
-                .put({ id: mode, rules: rules });
-            request.onerror = () => reject('Error saving custom rule.');
-            request.onsuccess = () => resolve();
-        });
-    },
-    async getCustomRule(mode) {
-        const db = await this.openDb();
-        return new Promise((resolve) => {
-            const request = db
-                .transaction(this.stores.customRules, 'readonly')
-                .objectStore(this.stores.customRules)
-                .get(mode);
-            request.onerror = () => resolve(null);
-            request.onsuccess = () =>
-                resolve(request.result ? request.result.rules : null);
-        });
-    },
     async saveChatHistory(history) {
         const db = await this.openDb();
         return new Promise((resolve, reject) => {
@@ -287,4 +264,5 @@ export const DbManager = {
             request.onsuccess = () => resolve();
         });
     },
+
 };

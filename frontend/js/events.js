@@ -29,15 +29,11 @@ export function initializeEventListeners(appState) {
     const chatInput = document.getElementById('chat-input');
     const chatSendButton = document.getElementById('chat-send-button');
     const chatCancelButton = document.getElementById('chat-cancel-button');
-    const apiKeysTextarea = document.getElementById('api-keys-textarea');
-    const saveKeysButton = document.getElementById('save-keys-button');
     const thinkingIndicator = document.getElementById('thinking-indicator');
     const toggleFilesButton = document.getElementById('toggle-files-button');
     const imageUploadButton = document.getElementById('image-upload-button');
     const imageInput = document.getElementById('image-input');
     const imagePreviewContainer = document.getElementById('image-preview-container');
-    const rateLimitSlider = document.getElementById('rate-limit-slider');
-    const rateLimitInput = document.getElementById('rate-limit-input');
     const viewContextButton = document.getElementById('view-context-button');
     const condenseContextButton = document.getElementById('condense-context-button');
     const clearContextButton = document.getElementById('clear-context-button');
@@ -83,6 +79,8 @@ export function initializeEventListeners(appState) {
 
 
     window.addEventListener('beforeunload', saveCurrentSession);
+
+    initializeLLMSettingsEventListeners();
 
     let saveTimeout;
     editorContainer.addEventListener('keyup', () => {
@@ -133,7 +131,6 @@ export function initializeEventListeners(appState) {
         }
     });
 
-    saveKeysButton.addEventListener('click', () => ApiKeyManager.saveKeys(apiKeysTextarea));
     chatSendButton.addEventListener('click', () => GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, appState.uploadedImage, clearImagePreview));
     chatCancelButton.addEventListener('click', () => GeminiChat.cancelMessage());
 
@@ -151,17 +148,6 @@ export function initializeEventListeners(appState) {
         }
     });
 
-    rateLimitSlider.addEventListener('input', () => {
-        rateLimitInput.value = rateLimitSlider.value;
-        GeminiChat.rateLimit = parseInt(rateLimitSlider.value, 10) * 1000;
-        localStorage.setItem('rateLimitValue', rateLimitSlider.value);
-    });
-
-    rateLimitInput.addEventListener('input', () => {
-        rateLimitSlider.value = rateLimitInput.value;
-        GeminiChat.rateLimit = parseInt(rateLimitInput.value, 10) * 1000;
-        localStorage.setItem('rateLimitValue', rateLimitInput.value);
-    });
 
     viewContextButton.addEventListener('click', async () => {
         contextDisplay.textContent = await GeminiChat.viewHistory();
@@ -559,4 +545,34 @@ export function initializeEventListeners(appState) {
             tasksContainer.appendChild(button);
         }
     }
+}
+
+function initializeLLMSettingsEventListeners() {
+    const settingsPanel = document.getElementById('llm-settings-panel');
+    if (!settingsPanel) return;
+
+    const tabsContainer = settingsPanel.querySelector('.settings-tabs');
+    const tabContents = settingsPanel.querySelectorAll('.tab-content');
+    const saveButton = document.getElementById('save-llm-settings-button');
+
+    tabsContainer.addEventListener('click', (event) => {
+        if (event.target.tagName === 'BUTTON') {
+            const tabName = event.target.dataset.tab;
+            
+            tabsContainer.querySelectorAll('.tab-link').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            tabContents.forEach(content => {
+                if (content.id === tabName) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+        }
+    });
+
+    saveButton.addEventListener('click', () => {
+        UI.saveLLMSettings();
+    });
 }

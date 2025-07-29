@@ -1,10 +1,10 @@
-import { DbManager } from './db.js';
-import { ApiKeyManager } from './api_manager.js';
+import { Settings, dispatchLLMSettingsUpdated } from './settings.js';
 import { GeminiChat } from './gemini_chat.js';
 import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import * as FileSystem from './file_system.js';
 import { initializeEventListeners } from './events.js';
+import { DbManager } from './db.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
 
@@ -18,8 +18,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const apiKeysTextarea = document.getElementById('api-keys-textarea');
     const thinkingIndicator = document.getElementById('thinking-indicator');
     const imagePreviewContainer = document.getElementById('image-preview-container');
-    const rateLimitSlider = document.getElementById('rate-limit-slider');
-    const rateLimitInput = document.getElementById('rate-limit-input');
 
     // --- App State ---
     const appState = {
@@ -53,52 +51,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if ((await savedHandle.queryPermission({ mode: 'readwrite' })) === 'granted') {
             appState.rootDirectoryHandle = savedHandle;
-            GeminiChat.rootDirectoryHandle = savedHandle;
-            
-
+            appState.rootDirectoryHandle = savedHandle;
             await UI.refreshFileTree(savedHandle, appState.onFileSelect);
 
             const savedState = await DbManager.getSessionState();
             if (savedState) {
-                console.log('Restoring previous session...');
-                await Editor.restoreEditorState(savedState.editor, savedHandle, tabBarContainer);
-                if (savedState.chat && savedState.chat.length > 0) {
-                    await GeminiChat._restartSessionWithHistory(savedState.chat);
-                    UI.renderChatHistory(chatMessages, savedState.chat);
-                }
+                await Editor.restoreEditorState(savedState.tabs, appState.rootDirectoryHandle, tabBarContainer);
             }
+            UI.updateDirectoryButtons(true);
         } else {
             UI.updateDirectoryButtons(false, true);
         }
     }
 
-    // --- Load settings first ---
-    const savedRateLimit = localStorage.getItem('rateLimitValue') || '5';
-    rateLimitSlider.value = savedRateLimit;
-    rateLimitInput.value = savedRateLimit;
-    GeminiChat.rateLimit = parseInt(savedRateLimit, 10) * 1000;
-
-    await ApiKeyManager.loadKeys(apiKeysTextarea);
-
-    // --- Restore session and initialize chat ---
-    await GeminiChat.initialize();
-    window.App = appState;
+    // --- Initialization ---
+    await Settings.initialize();
     await tryRestoreDirectory();
+    
+    // Setup UI with cached settings
+    UI.setupLLMSettingsPanel();
 
-    if (!GeminiChat.chatSession) {
-        await GeminiChat._startChat();
+    if (appState.rootDirectoryHandle) {
+        await GeminiChat.initialize(appState.rootDirectoryHandle);
     }
+    
+    // Listen for settings changes to re-initialize the chat service
+    document.addEventListener('llm-settings-updated', async () => {
+        console.log('LLM settings updated, re-initializing chat service...');
+        if (appState.rootDirectoryHandle) {
+            await GeminiChat.initialize(appState.rootDirectoryHandle);
+        }
+    });
 
     appState.saveCurrentSession = async () => {
         if (!appState.rootDirectoryHandle) return;
 
         const editorState = Editor.getEditorState();
-        const chatHistory = GeminiChat.chatSession ? await GeminiChat.chatSession.getHistory() : [];
-
         const sessionState = {
             id: 'lastSession',
             editor: editorState,
-            chat: chatHistory,
         };
         await DbManager.saveSessionState(sessionState);
     };
@@ -163,7 +154,7 @@ Analyze the code and provide the necessary changes to resolve these issues.
             appState.rootDirectoryHandle = handle;
             await DbManager.saveDirectoryHandle(handle);
             await UI.refreshFileTree(handle, appState.onFileSelect);
-            GeminiChat.rootDirectoryHandle = handle; // Update the handle
+            GeminiChat.initialize(handle);
         } catch (error) {
             console.error('Error opening directory:', error);
         }
