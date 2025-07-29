@@ -4,6 +4,7 @@ import * as FileSystem from './file_system.js';
 import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import { ChatService } from './chat_service.js';
+import { UndoManager } from './undo_manager.js';
 
 // --- Helper Functions ---
 
@@ -177,14 +178,18 @@ async function _readMultipleFiles({ filenames }, rootHandle) {
 
 async function _createFile({ filename, content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for create_file.");
-   const cleanContent = stripMarkdownCodeBlock(content);
-   const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
+    const cleanContent = stripMarkdownCodeBlock(content);
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
     if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
         throw new Error('Permission to write to the file was denied.');
     }
-   const writable = await fileHandle.createWritable();
-   await writable.write(cleanContent);
-   await writable.close();
+    
+    // Track for undo - save empty content since this is a new file creation
+    UndoManager.push(filename, '');
+    
+    const writable = await fileHandle.createWritable();
+    await writable.write(cleanContent);
+    await writable.close();
     await new Promise(resolve => setTimeout(resolve, 100)); // Mitigate race condition
     await UI.refreshFileTree(rootHandle, (filePath) => {
         const fileHandle = FileSystem.getFileHandleFromPath(rootHandle, filePath);
@@ -256,18 +261,21 @@ async function _renameFile({ old_path, new_path }, rootHandle) {
 async function _insertContent({ filename, line_number, content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for insert_content.");
     if (typeof line_number !== 'number') throw new Error("The 'line_number' parameter is required and must be a number for insert_content.");
-   const cleanContent = stripMarkdownCodeBlock(content);
-   const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
-   const file = await fileHandle.getFile();
-   const originalContent = await file.text();
-   UndoManager.push(filename, originalContent);
-   const lines = originalContent.split('\n');
-   const insertionPoint = Math.max(0, line_number - 1);
-   lines.splice(insertionPoint, 0, cleanContent);
-   const newContent = lines.join('\n');
+    const cleanContent = stripMarkdownCodeBlock(content);
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename);
+    
+    // Check permissions before modifying content
     if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
         throw new Error('Permission to write to the file was denied.');
     }
+    
+    const file = await fileHandle.getFile();
+    const originalContent = await file.text();
+    UndoManager.push(filename, originalContent);
+    const lines = originalContent.split('\n');
+    const insertionPoint = Math.max(0, line_number - 1);
+    lines.splice(insertionPoint, 0, cleanContent);
+    const newContent = lines.join('\n');
     const writable = await fileHandle.createWritable();
      await writable.write(newContent);
      await writable.close();
@@ -612,7 +620,62 @@ async function _analyzeCode({ filename }, rootHandle) {
     return { analysis };
 }
 
+// Helper function to validate terminal commands for safety
+function validateTerminalCommand(command) {
+    if (!command || typeof command !== 'string') {
+        throw new Error('Command must be a non-empty string');
+    }
+    
+    // List of dangerous commands that should be blocked
+    const dangerousCommands = [
+        'rm -rf',
+        'rm -r',
+        'sudo rm',
+        'format',
+        'del /s',
+        'rd /s',
+        'mkfs',
+        'dd if=',
+        'fdisk',
+        'shutdown',
+        'reboot',
+        'halt',
+        'init 0',
+        'killall',
+        'kill -9',
+        'chmod 777',
+        'chown -R',
+        '> /dev/',
+        'curl.*|.*sh',
+        'wget.*|.*sh',
+    ];
+    
+    const lowerCommand = command.toLowerCase();
+    for (const dangerous of dangerousCommands) {
+        if (lowerCommand.includes(dangerous.toLowerCase())) {
+            throw new Error(`Command contains potentially dangerous operation: ${dangerous}`);
+        }
+    }
+    
+    // Block commands with suspicious patterns
+    if (lowerCommand.match(/rm\s+.*-r/) || 
+        lowerCommand.match(/>\s*\/dev\//) ||
+        lowerCommand.match(/\|\s*sh/) ||
+        lowerCommand.match(/\|\s*bash/)) {
+        throw new Error('Command contains potentially dangerous patterns');
+    }
+    
+    return true;
+}
+
 async function _runTerminalCommand(parameters, rootHandle) {
+    if (!parameters.command) {
+        throw new Error("The 'command' parameter is required for run_terminal_command.");
+    }
+    
+    // Validate command for security
+    validateTerminalCommand(parameters.command);
+    
     const updatedParameters = { ...parameters, cwd: rootHandle.name };
     const response = await fetch('/api/execute-tool', {
         method: 'POST',
@@ -631,8 +694,21 @@ async function _runTerminalCommand(parameters, rootHandle) {
     }
 }
 
+// Helper function to safely escape shell arguments
+function escapeShellArg(arg) {
+    if (typeof arg !== 'string') {
+        throw new Error('Shell argument must be a string');
+    }
+    // Replace any single quotes with '\'' (close quote, escaped quote, open quote)
+    return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+
 async function _getFileHistory({ filename }, rootHandle) {
-    const command = `git log --pretty=format:"%h - %an, %ar : %s" -- ${filename}`;
+    if (!filename) throw new Error("The 'filename' parameter is required for get_file_history.");
+    
+    // Safely escape the filename to prevent command injection
+    const escapedFilename = escapeShellArg(filename);
+    const command = `git log --pretty=format:"%h - %an, %ar : %s" -- ${escapedFilename}`;
     const updatedParameters = { command, cwd: rootHandle.name };
     const response = await fetch('/api/execute-tool', {
         method: 'POST',
