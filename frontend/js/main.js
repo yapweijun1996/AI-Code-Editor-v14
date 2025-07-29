@@ -30,6 +30,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearImagePreview: null,
         handleFixErrors: null,
         handleImageUpload: null,
+        handleCreateFile: null,
+        handleCreateFolder: null,
+        handleRenameEntry: null,
+        handleDeleteEntry: null,
     };
 
     // --- Initialization ---
@@ -52,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if ((await savedHandle.queryPermission({ mode: 'readwrite' })) === 'granted') {
             appState.rootDirectoryHandle = savedHandle;
             appState.rootDirectoryHandle = savedHandle;
-            await UI.refreshFileTree(savedHandle, appState.onFileSelect);
+            await UI.refreshFileTree(savedHandle, appState.onFileSelect, appState);
 
             const savedState = await DbManager.getSessionState();
             if (savedState) {
@@ -148,6 +152,56 @@ Analyze the code and provide the necessary changes to resolve these issues.
 
         chatInput.value = prompt.trim();
         ChatService.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
+    };
+
+    appState.handleCreateFile = async (parentNode, newFileName) => {
+        const parentPath = parentNode.id === '#' ? '' : parentNode.id;
+        const newFilePath = parentPath ? `${parentPath}/${newFileName}` : newFileName;
+        try {
+            const fileHandle = await FileSystem.getFileHandleFromPath(appState.rootDirectoryHandle, newFilePath, { create: true });
+            await UI.refreshFileTree(appState.rootDirectoryHandle, appState.onFileSelect, appState);
+            Editor.openFile(fileHandle, newFilePath, tabBarContainer);
+        } catch (error) {
+            console.error('Error creating file:', error);
+            UI.showError(`Failed to create file: ${error.message}`);
+        }
+    };
+
+    appState.handleCreateFolder = async (parentNode, newFolderName) => {
+        const parentPath = parentNode.id === '#' ? '' : parentNode.id;
+        const newFolderPath = parentPath ? `${parentPath}/${newFolderName}` : newFolderName;
+        try {
+            await FileSystem.createDirectoryFromPath(appState.rootDirectoryHandle, newFolderPath);
+            await UI.refreshFileTree(appState.rootDirectoryHandle, appState.onFileSelect, appState);
+        } catch (error) {
+            console.error('Error creating folder:', error);
+            UI.showError(`Failed to create folder: ${error.message}`);
+        }
+    };
+
+    appState.handleRenameEntry = async (node, newName) => {
+        const oldPath = node.id;
+        const parentPath = node.parent === '#' ? '' : node.parent;
+        const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+        try {
+            await FileSystem.renameEntry(appState.rootDirectoryHandle, oldPath, newPath);
+            await UI.refreshFileTree(appState.rootDirectoryHandle, appState.onFileSelect, appState);
+        } catch (error) {
+            console.error('Error renaming entry:', error);
+            UI.showError(`Failed to rename: ${error.message}`);
+            await UI.refreshFileTree(appState.rootDirectoryHandle, appState.onFileSelect, appState);
+        }
+    };
+
+    appState.handleDeleteEntry = async (node) => {
+        const path = node.id;
+        try {
+            await FileSystem.deleteEntry(appState.rootDirectoryHandle, path);
+            await UI.refreshFileTree(appState.rootDirectoryHandle, appState.onFileSelect, appState);
+        } catch (error) {
+            console.error('Error deleting entry:', error);
+            UI.showError(`Failed to delete: ${error.message}`);
+        }
     };
 
 

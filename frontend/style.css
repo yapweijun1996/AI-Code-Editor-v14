@@ -1193,3 +1193,32 @@ button:hover {
     font-weight: bold;
     text-transform: capitalize;
 }
+
+/* --- JSTree Context Menu Styles --- */
+.vakata-context {
+    background: var(--sidebar-bg) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+    color: var(--text) !important;
+    border-radius: 4px;
+    padding: 4px;
+    margin: 0;
+}
+.vakata-context-hover > a {
+    background-color: var(--primary) !important;
+    color: var(--chat-user-text) !important;
+    border-radius: 3px;
+}
+.vakata-context-separator > a {
+    height: 1px !important;
+    background-color: var(--border) !important;
+    margin: 4px 0 !important;
+}
+.vakata-context li > a {
+    color: var(--text) !important;
+    padding: 6px 12px !important;
+    font-size: 0.9rem;
+}
+.vakata-context i {
+    display: none; /* Hide default icons */
+}

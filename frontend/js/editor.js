@@ -1,6 +1,7 @@
 import { getFileHandleFromPath } from './file_system.js';
 import { ChatService } from './chat_service.js';
 import * as UI from './ui.js';
+import { monacoModelManager } from './monaco_model_manager.js';
 
 const MONACO_CDN_PATH = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
 
@@ -48,14 +49,21 @@ function renderTabs(tabBarContainer, onTabClick, onTabClose) {
 
 export function clearEditor() {
     if (editor) {
-        editor.setModel(
-            monaco.editor.createModel(
-                '// Select a file to view its content',
-                'plaintext',
-            ),
+        // Use managed model instead of creating directly
+        const placeholderModel = monacoModelManager.getModel(
+            '__placeholder__', 
+            '// Select a file to view its content',
+            'plaintext'
         );
+        editor.setModel(placeholderModel);
         editor.updateOptions({ readOnly: true });
     }
+    
+    // Properly dispose of all open file models
+    for (const [filePath] of openFiles) {
+        monacoModelManager.disposeModel(filePath);
+    }
+    
     activeFilePath = null;
     openFiles = new Map();
 }
@@ -180,13 +188,17 @@ export async function openFile(fileHandle, filePath, tabBarContainer, focusEdito
         const file = await fileHandle.getFile();
         const content = await file.text();
 
+        // Use managed model creation
+        const model = monacoModelManager.getModel(
+            filePath,
+            content,
+            getLanguageFromExtension(file.name.split('.').pop())
+        );
+
         openFiles.set(filePath, {
             handle: fileHandle,
             name: file.name,
-            model: monaco.editor.createModel(
-                content,
-                getLanguageFromExtension(file.name.split('.').pop()),
-            ),
+            model: model,
             viewState: null,
         });
 
@@ -222,7 +234,8 @@ export async function switchTab(filePath, tabBarContainer, focusEditor = true) {
 export function closeTab(filePath, tabBarContainer) {
     const fileData = openFiles.get(filePath);
     if (fileData && fileData.model) {
-        fileData.model.dispose();
+        // Use model manager for proper disposal
+        monacoModelManager.disposeModel(filePath);
     }
     openFiles.delete(filePath);
 
@@ -334,9 +347,11 @@ export async function restoreEditorState(state, rootHandle, tabBarContainer) {
     for (const fileData of state.openFiles) {
         try {
             const fileHandle = await getFileHandleFromPath(rootHandle, fileData.path, { create: true });
-            const model = monaco.editor.createModel(
+            // Use managed model creation
+            const model = monacoModelManager.getModel(
+                fileData.path,
                 fileData.content,
-                getLanguageFromExtension(fileData.path.split('.').pop()),
+                getLanguageFromExtension(fileData.path.split('.').pop())
             );
             openFiles.set(fileData.path, {
                 handle: fileHandle,
@@ -366,7 +381,8 @@ export async function restoreCheckpointState(state, rootHandle, tabBarContainer)
     for (const filePath of currentFiles) {
         const fileData = openFiles.get(filePath);
         if (fileData && fileData.model) {
-            fileData.model.dispose();
+            // Use model manager for proper disposal
+            monacoModelManager.disposeModel(filePath);
         }
         openFiles.delete(filePath);
     }

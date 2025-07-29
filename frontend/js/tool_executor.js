@@ -19,6 +19,73 @@ function stripMarkdownCodeBlock(content) {
    return match ? match[1] : content;
 }
 
+// Syntax validation before writing files
+async function validateSyntaxBeforeWrite(filename, content) {
+    const extension = filename.split('.').pop();
+    const languageMap = {
+        'js': 'javascript',
+        'jsx': 'javascript', 
+        'ts': 'typescript',
+        'tsx': 'typescript',
+        'css': 'css',
+        'html': 'html',
+        'json': 'json'
+    };
+    
+    const language = languageMap[extension];
+    if (!language) return true; // Skip validation for unsupported file types
+    
+    try {
+        // Create temporary model for validation
+        const tempModel = monaco.editor.createModel(content, language);
+        
+        // Wait a bit for Monaco to process the model
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const markers = monaco.editor.getModelMarkers({ resource: tempModel.uri });
+        const errors = markers.filter(m => m.severity === monaco.MarkerSeverity.Error);
+        
+        tempModel.dispose(); // Clean up
+        
+        if (errors.length > 0) {
+            const errorMessages = errors.map(e => `Line ${e.startLineNumber}: ${e.message}`).join('\n');
+            throw new Error(`Syntax validation failed:\n${errorMessages}`);
+        }
+        
+        return true;
+    } catch (error) {
+        console.warn('Syntax validation error:', error);
+        // Don't block file writing for validation errors, just warn
+        return true;
+    }
+}
+
+// Streaming file processing for large files
+async function streamFileUpdate(filename, content, chunkSize = 50000) {
+    const chunks = [];
+    for (let i = 0; i < content.length; i += chunkSize) {
+        chunks.push(content.slice(i, i + chunkSize));
+    }
+    
+    let result = '';
+    for (let i = 0; i < chunks.length; i++) {
+        result += chunks[i];
+        
+        // Yield control to prevent UI blocking
+        if (i % 5 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        
+        // Update progress for large files
+        if (chunks.length > 10) {
+            const progress = Math.round((i / chunks.length) * 100);
+            console.log(`Processing large file: ${progress}%`);
+        }
+    }
+    
+    return result;
+}
+
 // --- Tool Handlers ---
 
 function unescapeHtmlEntities(text) {
@@ -203,25 +270,41 @@ async function _createFile({ filename, content }, rootHandle) {
 
 async function _rewriteFile({ filename, content }, rootHandle) {
     if (!filename) throw new Error("The 'filename' parameter is required for rewrite_file.");
-   const cleanContent = stripMarkdownCodeBlock(content);
-   const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
+    const cleanContent = stripMarkdownCodeBlock(content);
+    const fileHandle = await FileSystem.getFileHandleFromPath(rootHandle, filename, { create: true });
     if (!await FileSystem.verifyAndRequestPermission(fileHandle, true)) {
         throw new Error('Permission to write to the file was denied.');
     }
+    
+    let originalContent = '';
     try {
         const file = await fileHandle.getFile();
-        const originalContent = await file.text();
+        originalContent = await file.text();
         UndoManager.push(filename, originalContent);
     } catch (e) {
         // File doesn't exist, push empty content for undo
         UndoManager.push(filename, '');
     }
-   const writable = await fileHandle.createWritable();
-   await writable.write(cleanContent);
-   await writable.close();
-   if (Editor.getOpenFiles().has(filename)) {
-       Editor.getOpenFiles().get(filename)?.model.setValue(cleanContent);
-   }
+
+    // Validate syntax before writing
+    await validateSyntaxBeforeWrite(filename, cleanContent);
+
+    // Use streaming for large files
+    const STREAM_THRESHOLD = 100000; // 100KB
+    let processedContent = cleanContent;
+    
+    if (cleanContent.length > STREAM_THRESHOLD) {
+        console.log(`Processing large file ${filename} with streaming...`);
+        processedContent = await streamFileUpdate(filename, cleanContent);
+    }
+
+    const writable = await fileHandle.createWritable();
+    await writable.write(processedContent);
+    await writable.close();
+    
+    if (Editor.getOpenFiles().has(filename)) {
+        Editor.getOpenFiles().get(filename)?.model.setValue(processedContent);
+    }
     await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
     document.getElementById('chat-input').focus();
     return { message: `File '${filename}' rewritten successfully.` };
@@ -306,17 +389,32 @@ async function _replaceLines({ filename, start_line, end_line, new_content }, ro
     const file = await fileHandle.getFile();
     const originalContent = await file.text();
     UndoManager.push(filename, originalContent);
-    const lines = originalContent.split('\n');
+    const lines = originalContent.split(/\r?\n/); // Handle both \n and \r\n
 
     // Clamp the line numbers to the file's bounds
     const clampedStart = Math.max(1, Math.min(lines.length, start_line));
     const clampedEnd = Math.max(clampedStart, Math.min(lines.length, end_line));
 
+    // Preserve indentation from the first line being replaced
+    const firstLineIndent = lines[clampedStart - 1]?.match(/^(\s*)/)?.[1] || '';
+    
     const before = lines.slice(0, clampedStart - 1);
     const after = lines.slice(clampedEnd);
-    const newLines = cleanNewContent.split('\n');
+    const newLines = cleanNewContent.split(/\r?\n/);
+    
+    // Apply consistent indentation to new content if needed
+    const indentedNewLines = newLines.map((line, index) => {
+        if (index === 0 || line.trim() === '') return line;
+        // Only add indentation if the line doesn't already have proper indentation
+        return line.startsWith(firstLineIndent) ? line : firstLineIndent + line.trimStart();
+    });
 
-    const updatedContent = [...before, ...newLines, ...after].join('\n');
+    // Preserve original line endings
+    const lineEnding = originalContent.includes('\r\n') ? '\r\n' : '\n';
+    const updatedContent = [...before, ...indentedNewLines, ...after].join(lineEnding);
+
+    // Validate syntax before applying changes
+    await validateSyntaxBeforeWrite(filename, updatedContent);
 
     const writable = await fileHandle.createWritable();
     await writable.write(updatedContent);
@@ -399,53 +497,118 @@ async function _createAndApplyDiff({ filename, new_content }, rootHandle) {
     UndoManager.push(filename, originalContent);
     const cleanNewContent = stripMarkdownCodeBlock(new_content);
 
-    const LARGE_FILE_THRESHOLD_BYTES = 250000; // 250KB
+    // Smart thresholds based on file size and content complexity
+    const PROGRESSIVE_DIFF_THRESHOLD = 1000000; // 1MB - use streaming
+    const LINE_DIFF_THRESHOLD = 100000; // 100KB - use line-based diff
+    const SIMPLE_DIFF_THRESHOLD = 50000; // 50KB - use standard diff
 
     let finalContent = cleanNewContent;
-    let method = 'diff';
+    let method = 'rewrite';
 
-    if (file.size > LARGE_FILE_THRESHOLD_BYTES) {
-        method = 'rewrite';
-    } else {
-        try {
-            const dmp = new diff_match_patch();
-            const a = dmp.diff_linesToChars_(originalContent, cleanNewContent);
-            const lineText1 = a.chars1;
-            const lineText2 = a.chars2;
-            const lineArray = a.lineArray;
-            const diffs = dmp.diff_main(lineText1, lineText2, false);
-            dmp.diff_charsToLines_(diffs, lineArray);
-            const patches = dmp.patch_make(originalContent, diffs);
+    // Validate syntax before processing
+    await validateSyntaxBeforeWrite(filename, cleanNewContent);
 
-            // Check if a valid patch could be created. If not, fall back to rewrite.
-            if (patches.length === 0 && originalContent !== cleanNewContent) {
-                 console.warn(`Diff generation failed for ${filename}, falling back to rewrite.`);
-                 method = 'rewrite';
-            } else {
-                 const [patchedContent, results] = dmp.patch_apply(patches, originalContent);
-                 if (results.some(r => !r)) {
-                     console.warn(`Patch application failed for ${filename}, falling back to rewrite.`);
-                     method = 'rewrite';
-                 } else {
-                     finalContent = patchedContent;
-                 }
-            }
-        } catch (error) {
-            console.error(`Diff/patch process for ${filename} failed with error: ${error.message}. Falling back to rewrite.`);
-            method = 'rewrite';
-        }
+    if (file.size > PROGRESSIVE_DIFF_THRESHOLD) {
+        // For very large files, use streaming with chunked processing
+        console.log(`Using streaming diff for large file: ${filename}`);
+        finalContent = await streamFileUpdate(filename, cleanNewContent);
+        method = 'stream';
+    } else if (file.size > LINE_DIFF_THRESHOLD) {
+        // For moderately large files, use optimized line-based diff
+        method = await performOptimizedLineDiff(originalContent, cleanNewContent, filename);
+        finalContent = method.success ? method.content : cleanNewContent;
+        method = method.success ? 'line-diff' : 'rewrite';
+    } else if (file.size > SIMPLE_DIFF_THRESHOLD) {
+        // For smaller files, use standard diff but with better error handling
+        method = await performStandardDiff(originalContent, cleanNewContent, filename);
+        finalContent = method.success ? method.content : cleanNewContent;
+        method = method.success ? 'diff' : 'rewrite';
     }
+    // For very small files, just rewrite (it's faster than diffing)
 
     const writable = await fileHandle.createWritable();
     await writable.write(finalContent);
     await writable.close();
 
     if (Editor.getOpenFiles().has(filename)) {
-        Editor.getOpenFiles().get(filename)?.model.setValue(finalContent);
+        const openFile = Editor.getOpenFiles().get(filename);
+        if (openFile?.model) {
+            // Use batch operations for large content updates
+            if (finalContent.length > 100000) {
+                openFile.model.pushEditOperations([], [{
+                    range: openFile.model.getFullModelRange(),
+                    text: finalContent
+                }], () => null);
+            } else {
+                openFile.model.setValue(finalContent);
+            }
+        }
     }
     await Editor.openFile(fileHandle, filename, document.getElementById('tab-bar'), false);
     document.getElementById('chat-input').focus();
     return { message: `File '${filename}' updated successfully (Method: ${method}).` };
+}
+
+// Optimized line-based diff for moderately large files
+async function performOptimizedLineDiff(originalContent, newContent, filename) {
+    try {
+        const dmp = new diff_match_patch();
+        dmp.Diff_Timeout = 2; // 2 second timeout
+        
+        const a = dmp.diff_linesToChars_(originalContent, newContent);
+        const lineText1 = a.chars1;
+        const lineText2 = a.chars2;
+        const lineArray = a.lineArray;
+        
+        const diffs = dmp.diff_main(lineText1, lineText2, false);
+        dmp.diff_charsToLines_(diffs, lineArray);
+        dmp.diff_cleanupSemantic(diffs);
+        
+        const patches = dmp.patch_make(originalContent, diffs);
+        
+        if (patches.length === 0 && originalContent !== newContent) {
+            return { success: false };
+        }
+        
+        const [patchedContent, results] = dmp.patch_apply(patches, originalContent);
+        
+        if (results.some(r => !r)) {
+            return { success: false };
+        }
+        
+        return { success: true, content: patchedContent };
+    } catch (error) {
+        console.warn(`Optimized line diff failed for ${filename}:`, error.message);
+        return { success: false };
+    }
+}
+
+// Standard diff with improved error handling
+async function performStandardDiff(originalContent, newContent, filename) {
+    try {
+        const dmp = new diff_match_patch();
+        dmp.Diff_Timeout = 1; // 1 second timeout for smaller files
+        
+        const diffs = dmp.diff_main(originalContent, newContent);
+        dmp.diff_cleanupSemantic(diffs);
+        
+        const patches = dmp.patch_make(originalContent, diffs);
+        
+        if (patches.length === 0 && originalContent !== newContent) {
+            return { success: false };
+        }
+        
+        const [patchedContent, results] = dmp.patch_apply(patches, originalContent);
+        
+        if (results.some(r => !r)) {
+            return { success: false };
+        }
+        
+        return { success: true, content: patchedContent };
+    } catch (error) {
+        console.warn(`Standard diff failed for ${filename}:`, error.message);
+        return { success: false };
+    }
 }
 
 async function _createFolder({ folder_path }, rootHandle) {

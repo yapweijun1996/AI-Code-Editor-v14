@@ -95,7 +95,7 @@ export function initializeEventListeners(appState) {
         try {
             appState.rootDirectoryHandle = await window.showDirectoryPicker();
             await DbManager.saveDirectoryHandle(appState.rootDirectoryHandle);
-            await UI.refreshFileTree(appState.rootDirectoryHandle, onFileSelect);
+            await UI.refreshFileTree(appState.rootDirectoryHandle, onFileSelect, appState);
             ChatService.rootDirectoryHandle = appState.rootDirectoryHandle; // Update the handle
         } catch (error) {
             console.error('Error opening directory:', error);
@@ -118,7 +118,7 @@ export function initializeEventListeners(appState) {
             try {
                 if ((await savedHandle.requestPermission({ mode: 'readwrite' })) === 'granted') {
                     appState.rootDirectoryHandle = savedHandle;
-                    await UI.refreshFileTree(appState.rootDirectoryHandle, onFileSelect);
+                    await UI.refreshFileTree(appState.rootDirectoryHandle, onFileSelect, appState);
                     ChatService.rootDirectoryHandle = appState.rootDirectoryHandle; // Update the handle
                 } else {
                     alert('Permission to access the folder was denied.');
@@ -226,7 +226,7 @@ export function initializeEventListeners(appState) {
             if (checkpoint && checkpoint.editorState) {
                 await Editor.restoreCheckpointState(checkpoint.editorState, appState.rootDirectoryHandle, tabBarContainer);
                 await Editor.saveAllOpenFiles(); // Save all restored files to disk
-                await UI.refreshFileTree(appState.rootDirectoryHandle, onFileSelect);
+                await UI.refreshFileTree(appState.rootDirectoryHandle, onFileSelect, appState);
                 checkpointsModal.style.display = 'none';
                 alert(`Project state restored to checkpoint '${checkpoint.name}'.`);
             }

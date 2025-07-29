@@ -29654,5 +29654,8 @@
   ],
   "frontend\\js\\llm\\service_factory.js": [
     "LLMServiceFactory"
+  ],
+  "frontend/js/monaco_model_manager.js": [
+    "MonacoModelManager"
   ]
 }

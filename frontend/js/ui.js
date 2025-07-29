@@ -24,32 +24,104 @@ export function relayout(editor) {
     }
 }
 
-export function renderTree(treeData, onFileSelect) {
+export function renderTree(treeData, onFileSelect, appState) {
     $('#file-tree')
-    .on('select_node.jstree', (e, data) => {
-        if (data.node.type === 'file') {
-            onFileSelect(data.node.id);
-        }
-    })
-    .jstree({
-        core: {
-            data: treeData,
-            themes: {
-                name: 'default',
-                responsive: true,
-                icons: true,
+        .on('select_node.jstree', (e, data) => {
+            if (data.node.type === 'file') {
+                onFileSelect(data.node.id);
+            }
+        })
+        .jstree({
+            core: {
+                data: treeData,
+                check_callback: true,
+                themes: {
+                    name: 'default',
+                    responsive: true,
+                    icons: true,
+                },
             },
-        },
-        types: {
-            default: { icon: 'jstree-icon jstree-file' },
-            folder: { icon: 'jstree-icon jstree-folder' },
-            file: { icon: 'jstree-icon jstree-file' },
-        },
-        plugins: ['types'],
-    });
+            types: {
+                default: { icon: 'jstree-icon jstree-file' },
+                folder: { icon: 'jstree-icon jstree-folder' },
+                file: { icon: 'jstree-icon jstree-file' },
+            },
+            plugins: ['types', 'contextmenu', 'dnd'],
+            contextmenu: {
+                items: function (node) {
+                    const tree = $('#file-tree').jstree(true);
+                    const isRoot = node.parent === '#';
+
+                    const items = {
+                        createFile: {
+                            separator_before: false,
+                            separator_after: false,
+                            label: "New File",
+                            action: async function (obj) {
+                                const parentNode = tree.get_node(node);
+                                const newFileName = prompt("Enter new file name:");
+                                if (newFileName) {
+                                    await appState.handleCreateFile(parentNode, newFileName);
+                                }
+                            }
+                        },
+                        createFolder: {
+                            separator_before: false,
+                            separator_after: false,
+                            label: "New Folder",
+                            action: async function (obj) {
+                                const parentNode = tree.get_node(node);
+                                const newFolderName = prompt("Enter new folder name:");
+                                if (newFolderName) {
+                                    await appState.handleCreateFolder(parentNode, newFolderName);
+                                }
+                            }
+                        },
+                        rename: {
+                            separator_before: true,
+                            separator_after: false,
+                            label: "Rename",
+                            action: function (obj) {
+                                tree.edit(node);
+                            }
+                        },
+                        "delete": {
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Delete",
+                            action: async function (obj) {
+                                if (confirm(`Are you sure you want to delete ${node.text}?`)) {
+                                    const nodeToDelete = tree.get_node(node);
+                                    await appState.handleDeleteEntry(nodeToDelete);
+                                }
+                            }
+                        }
+                    };
+
+                    if (node.type === 'file') {
+                        delete items.createFile;
+                        delete items.createFolder;
+                    }
+                    if (isRoot) {
+                        delete items.rename;
+                        delete items.delete;
+                    }
+
+
+                    return items;
+                }
+            }
+        })
+        .on('rename_node.jstree', async function (e, data) {
+            const newPath = data.text;
+            const oldPath = data.old;
+            if(newPath !== oldPath) {
+                await appState.handleRenameEntry(data.node, newPath);
+            }
+        });
 };
 
-export async function refreshFileTree(rootDirectoryHandle, onFileSelect) {
+export async function refreshFileTree(rootDirectoryHandle, onFileSelect, appState) {
     if (rootDirectoryHandle) {
         const treeInstance = $('#file-tree').jstree(true);
         if (treeInstance) {
@@ -58,7 +130,7 @@ export async function refreshFileTree(rootDirectoryHandle, onFileSelect) {
 
         const ignorePatterns = await getIgnorePatterns(rootDirectoryHandle);
         const treeData = await buildTree(rootDirectoryHandle, ignorePatterns);
-        renderTree(treeData, onFileSelect);
+        renderTree(treeData, onFileSelect, appState);
 
         updateDirectoryButtons(true);
     }

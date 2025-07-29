@@ -92,6 +92,26 @@ export async function renameEntry(rootDirHandle, oldPath, newPath) {
     }
 }
 
+export async function deleteEntry(rootDirHandle, path) {
+    try {
+        const { parentHandle, entryName } = await getParentDirectoryHandle(rootDirHandle, path);
+        
+        // Check if it's a file or directory
+        let isDirectory = false;
+        try {
+            await parentHandle.getDirectoryHandle(entryName);
+            isDirectory = true;
+        } catch (e) {
+            // Not a directory, assume file
+        }
+
+        await parentHandle.removeEntry(entryName, { recursive: isDirectory });
+    } catch (error) {
+        throw new Error(`Failed to delete entry: ${error.message}`);
+    }
+}
+
+
 export async function searchInDirectory(
     dirHandle,
     searchTerm,

@@ -120,6 +120,8 @@ export const ChatService = {
 
         let functionCalls;
         let continueLoop = true;
+        let totalRequestTokens = 0;
+        let totalResponseTokens = 0;
         
         while (continueLoop && !this.isCancelled) {
             try {
@@ -140,6 +142,11 @@ export const ChatService = {
                     }
                     if (chunk.functionCalls) {
                         functionCalls.push(...chunk.functionCalls);
+                    }
+                    if (chunk.usageMetadata) {
+                        totalRequestTokens += chunk.usageMetadata.promptTokenCount || 0;
+                        totalResponseTokens += chunk.usageMetadata.candidatesTokenCount || 0;
+                        UI.updateTokenDisplay(totalRequestTokens, totalResponseTokens);
                     }
                 }
 
