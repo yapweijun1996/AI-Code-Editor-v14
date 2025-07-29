@@ -8,6 +8,9 @@ const { marked } = require('marked');
 const projectRoot = path.join(__dirname, '..');
 const indexFilePath = path.join(__dirname, 'codebase_index.json');
 
+let isLocked = false;
+let writeQueue = [];
+
 const SUPPORTED_EXTENSIONS = ['.cfm', '.js', '.html', '.md'];
 
 // --- Symbol Extraction Logic ---
@@ -173,10 +176,12 @@ async function getIndex() {
         return JSON.parse(data);
     } catch (error) {
         if (error.code === 'ENOENT') {
-            console.log('[Indexer] Index file not found. A new one will be created on the next build.');
-            return {}; // Return empty object if index doesn't exist
+            return {}; // Index doesn't exist, return empty object
         }
-        throw error;
+        // If parsing fails, it might be due to a write operation in progress.
+        // For now, we'll log the error and return an empty object to avoid crashing.
+        console.error(`[Indexer] Error reading or parsing index file, returning empty index:`, error);
+        return {};
     }
 }
 
@@ -184,33 +189,63 @@ async function getIndex() {
  * Adds or updates a single file in the index.
  * @param {string} filePath - The absolute path of the file to update.
  */
-async function addOrUpdateFile(filePath) {
-    const extension = path.extname(filePath);
-    if (!SUPPORTED_EXTENSIONS.includes(extension)) return;
+async function processWriteQueue() {
+    if (isLocked || writeQueue.length === 0) {
+        return;
+    }
+    isLocked = true;
+
+    const { filePath, operation } = writeQueue.shift();
 
     try {
         const index = await getIndex();
-        const content = await fs.readFile(filePath, 'utf8');
-        const symbols = extractSymbols(filePath, content);
         const relativePath = path.relative(projectRoot, filePath);
 
-        if (symbols.length > 0) {
-            console.log(`[Indexer] Updating index for ${relativePath} with ${symbols.length} symbols.`);
-            index[relativePath] = symbols;
-        } else {
-            // If no symbols are found, remove it from the index to keep it clean.
+        if (operation === 'remove') {
             if (index[relativePath]) {
-                console.log(`[Indexer] Removing ${relativePath} from index (no symbols found).`);
+                console.log(`[Indexer] Removing ${relativePath} from index.`);
                 delete index[relativePath];
             }
+        } else { // 'addOrUpdate'
+            const extension = path.extname(filePath);
+            if (SUPPORTED_EXTENSIONS.includes(extension)) {
+                try {
+                    const content = await fs.readFile(filePath, 'utf8');
+                    const symbols = extractSymbols(filePath, content);
+                    if (symbols.length > 0) {
+                        console.log(`[Indexer] Updating index for ${relativePath} with ${symbols.length} symbols.`);
+                        index[relativePath] = symbols;
+                    } else if (index[relativePath]) {
+                        console.log(`[Indexer] Removing ${relativePath} from index (no symbols found).`);
+                        delete index[relativePath];
+                    }
+                } catch (readError) {
+                    if (readError.code !== 'ENOENT') {
+                        console.error(`[Indexer] Error reading file ${filePath}:`, readError);
+                    }
+                }
+            }
         }
-        
+
         await fs.writeFile(indexFilePath, JSON.stringify(index, null, 2));
     } catch (error) {
-        if (error.code !== 'ENOENT') { // Ignore if the file was deleted before it could be read
-           console.error(`[Indexer] Error updating index for file ${filePath}:`, error);
-        }
+        console.error(`[Indexer] Error processing write queue for file ${filePath}:`, error);
+    } finally {
+        isLocked = false;
+        processWriteQueue(); // Process next item in the queue
     }
+}
+
+function queueWriteOperation(filePath, operation) {
+    // To prevent redundant operations, we can remove previous operations for the same file
+    writeQueue = writeQueue.filter(item => item.filePath !== filePath);
+    writeQueue.push({ filePath, operation });
+    processWriteQueue();
+}
+
+
+async function addOrUpdateFile(filePath) {
+    queueWriteOperation(filePath, 'addOrUpdate');
 }
 
 /**
@@ -218,17 +253,7 @@ async function addOrUpdateFile(filePath) {
  * @param {string} filePath - The absolute path of the file to remove.
  */
 async function removeFile(filePath) {
-    try {
-        const index = await getIndex();
-        const relativePath = path.relative(projectRoot, filePath);
-        if (index[relativePath]) {
-            console.log(`[Indexer] Removing ${relativePath} from index.`);
-            delete index[relativePath];
-            await fs.writeFile(indexFilePath, JSON.stringify(index, null, 2));
-        }
-    } catch (error) {
-        console.error(`[Indexer] Error removing file ${filePath} from index:`, error);
-    }
+    queueWriteOperation(filePath, 'remove');
 }
 
 
