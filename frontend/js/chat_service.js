@@ -169,11 +169,12 @@ export const ChatService = {
                     history.push({ role: 'user', parts: toolResults.map(functionResponse => ({ functionResponse })) });
                     
                     // For OpenAI: Continue the loop to get AI's next response
-                    // For other providers: Exit the loop after all tools are executed
+                    // For other providers (Gemini, Ollama): Check if AI wants to continue with more tools
                     if (this.llmService.constructor.name === 'OpenAIService') {
-                        continueLoop = true;
+                        continueLoop = true; // Always continue for OpenAI to get next response
                     } else {
-                        continueLoop = false;
+                        // For Gemini/Ollama: Continue the loop to allow them to make more tool calls if needed
+                        continueLoop = true;
                     }
                 } else {
                     // No tools called, conversation is complete
