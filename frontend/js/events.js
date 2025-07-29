@@ -81,6 +81,10 @@ export function initializeEventListeners(appState) {
 
     window.addEventListener('beforeunload', saveCurrentSession);
 
+    fileTreeContainer.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+
     let saveTimeout;
     editorContainer.addEventListener('keyup', () => {
         clearTimeout(saveTimeout);

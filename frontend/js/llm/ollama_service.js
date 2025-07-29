@@ -50,6 +50,12 @@ export class OllamaService extends BaseLLMService {
             try {
                 const json = JSON.parse(chunk);
                 if (json.done) {
+                    yield {
+                        usageMetadata: {
+                            promptTokenCount: json.prompt_eval_count,
+                            candidatesTokenCount: json.eval_count,
+                        }
+                    };
                     return;
                 }
                 yield {

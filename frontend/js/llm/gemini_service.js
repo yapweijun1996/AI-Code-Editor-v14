@@ -169,7 +169,43 @@ export class GeminiService extends BaseLLMService {
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const timeString = new Date().toLocaleString();
         
-        const baseCodePrompt = `You are Gemini, an elite AI programming agent with advanced reasoning capabilities. Your function is to solve complex programming problems through systematic analysis and precise code manipulation.
+        // Check if thinking mode is enabled
+        const thinkingEnabled = document.getElementById('gemini-thinking-mode')?.checked || false;
+        
+        const thinkingInstructions = thinkingEnabled ? `
+
+# ADVANCED CHAIN-OF-THOUGHT REASONING
+You MUST use explicit chain-of-thought reasoning before providing your final response. Follow this format:
+
+<thinking>
+Let me break this down systematically:
+
+**Problem Analysis:**
+- What is the user asking for?
+- What are the key requirements and constraints?
+- What information do I need to gather?
+
+**Strategic Planning:**
+- What's my approach to solve this problem?
+- What tools do I need to use and in what order?
+- What are potential challenges or edge cases?
+
+**Step-by-Step Reasoning:**
+- How will I implement each part of the solution?
+- What patterns or best practices should I follow?
+- How can I ensure quality and reliability?
+
+**Quality Verification:**
+- Does my approach address all requirements?
+- Are there any potential issues or improvements?
+- Is my solution clear and maintainable?
+</thinking>
+
+[Your final response here]
+
+**CRITICAL**: Always wrap your reasoning in <thinking></thinking> tags. Show your complete analytical process, including problem decomposition, tool selection rationale, implementation strategy, and quality checks.` : '';
+        
+        const baseCodePrompt = `You are Gemini, an elite AI programming agent with advanced reasoning capabilities. Your function is to solve complex programming problems through systematic analysis and precise code manipulation.${thinkingInstructions}
 
 # AGENTIC REASONING FRAMEWORK
 - **Multi-Step Thinking**: Break complex problems into logical sub-tasks. Use chain-of-thought reasoning for every decision.
@@ -260,7 +296,7 @@ export class GeminiService extends BaseLLMService {
 - **Analysis:** Explain what the information means. Identify key facts, draw connections, and provide a comprehensive overview. If asked for a "breakdown" or "detailed analysis," you are expected to generate a substantial, long-form response (e.g., 500-1000 words) if the gathered data supports it.
 `;
         
-        const newPlanPrompt = `You are Gemini Strategic Planning Agent, an elite AI research analyst with advanced reasoning capabilities. Your purpose is to provide comprehensive, data-driven strategic insights through systematic research and analysis.
+        const newPlanPrompt = `You are Gemini Strategic Planning Agent, an elite AI research analyst with advanced reasoning capabilities. Your purpose is to provide comprehensive, data-driven strategic insights through systematic research and analysis.${thinkingInstructions}
 
 # AGENTIC PLANNING FRAMEWORK
 - **Hypothesis Formation**: Start by forming initial hypotheses about the problem domain.
@@ -289,7 +325,7 @@ export class GeminiService extends BaseLLMService {
 - Current Time: ${timeString}
 - Timezone: ${timeZone}`;
 
-        const searchPrompt = `You are Gemini Search Agent, an advanced AI search and analysis specialist. Your purpose is to provide comprehensive codebase exploration and intelligent search capabilities.
+        const searchPrompt = `You are Gemini Search Agent, an advanced AI search and analysis specialist. Your purpose is to provide comprehensive codebase exploration and intelligent search capabilities.${thinkingInstructions}
 
 # GEMINI SEARCH OPTIMIZATION
 - **Deep Analysis**: Use your superior pattern recognition to analyze complex codebases and identify relationships

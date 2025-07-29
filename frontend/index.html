@@ -152,6 +152,18 @@
                         <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="gemini-thinking-mode">
+                        <input type="checkbox" id="gemini-thinking-mode"> Enable Advanced Thinking Mode
+                    </label>
+                    <small>Shows AI's reasoning process and improves response quality</small>
+                </div>
+                <div class="form-group">
+                    <label for="gemini-show-thinking">
+                        <input type="checkbox" id="gemini-show-thinking" checked> Show Thinking Process
+                    </label>
+                    <small>Display AI's reasoning in real-time during conversation</small>
+                </div>
             </div>
 
             <div id="openai-settings" class="tab-content">
@@ -175,6 +187,18 @@
                         <option value="gpt-4-turbo">GPT-4 Turbo</option>
                         <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label for="openai-thinking-mode">
+                        <input type="checkbox" id="openai-thinking-mode"> Enable O1-Style Thinking
+                    </label>
+                    <small>Uses advanced reasoning with explicit thinking steps (works best with o1 models)</small>
+                </div>
+                <div class="form-group">
+                    <label for="openai-show-thinking">
+                        <input type="checkbox" id="openai-show-thinking" checked> Show Thinking Process
+                    </label>
+                    <small>Display AI's reasoning steps during problem solving</small>
                 </div>
             </div>
 

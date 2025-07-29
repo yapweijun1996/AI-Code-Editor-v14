@@ -48,6 +48,7 @@ export function renderTree(treeData, onFileSelect, appState) {
             },
             plugins: ['types', 'contextmenu', 'dnd'],
             contextmenu: {
+                show_at_node: false,
                 items: function (node) {
                     const tree = $('#file-tree').jstree(true);
                     const isRoot = node.parent === '#';
@@ -110,6 +111,14 @@ export function renderTree(treeData, onFileSelect, appState) {
 
                     return items;
                 }
+            }
+        })
+        .on('contextmenu', function (e) {
+            e.preventDefault();
+            const tree = $(this).jstree(true);
+            const node = tree.get_node(e.target);
+            if (node) {
+                tree.show_contextmenu(node, e.pageX, e.pageY);
             }
         })
         .on('rename_node.jstree', async function (e, data) {
@@ -199,6 +208,62 @@ export function appendMessage(chatMessages, text, sender, isStreaming = false) {
         messageDiv.textContent = text;
     }
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+export function appendThinkingMessage(chatMessages, text, isStreaming = false) {
+    let thinkingDiv;
+    if (isStreaming) {
+        const lastMessage = chatMessages.lastElementChild;
+        if (lastMessage && lastMessage.classList.contains('thinking-message')) {
+            thinkingDiv = lastMessage;
+        }
+    }
+
+    if (!thinkingDiv) {
+        thinkingDiv = document.createElement('div');
+        thinkingDiv.className = 'chat-message thinking-message';
+        
+        const header = document.createElement('div');
+        header.className = 'thinking-header';
+        header.innerHTML = '🤔 <strong>AI is thinking...</strong>';
+        
+        const content = document.createElement('div');
+        content.className = 'thinking-content';
+        
+        const toggle = document.createElement('button');
+        toggle.className = 'thinking-toggle';
+        toggle.textContent = 'Show reasoning';
+        toggle.onclick = () => {
+            const isVisible = content.style.display !== 'none';
+            content.style.display = isVisible ? 'none' : 'block';
+            toggle.textContent = isVisible ? 'Show reasoning' : 'Hide reasoning';
+        };
+        
+        header.appendChild(toggle);
+        thinkingDiv.appendChild(header);
+        thinkingDiv.appendChild(content);
+        
+        // Initially hide content
+        content.style.display = 'none';
+        
+        chatMessages.appendChild(thinkingDiv);
+    }
+
+    const content = thinkingDiv.querySelector('.thinking-content');
+    content.innerHTML = DOMPurify.sanitize(marked.parse(text || ''));
+    thinkingDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    
+    return thinkingDiv;
+}
+
+export function finalizeThinkingMessage(thinkingDiv) {
+    if (thinkingDiv && thinkingDiv.classList.contains('thinking-message')) {
+        const header = thinkingDiv.querySelector('.thinking-header');
+        const toggle = header.querySelector('.thinking-toggle');
+        header.innerHTML = '💡 <strong>AI reasoning:</strong> ';
+        header.appendChild(toggle);
+        thinkingDiv.classList.add('thinking-complete');
+    }
 }
 
 
@@ -441,8 +506,12 @@ export async function saveLLMSettings() {
         'llm.provider': provider,
         'llm.gemini.apiKey': document.getElementById('gemini-api-keys').value,
         'llm.gemini.model': document.getElementById('gemini-model-selector').value,
+        'llm.gemini.thinkingMode': document.getElementById('gemini-thinking-mode').checked,
+        'llm.gemini.showThinking': document.getElementById('gemini-show-thinking').checked,
         'llm.openai.apiKey': document.getElementById('openai-api-key').value,
         'llm.openai.model': document.getElementById('openai-model-selector').value,
+        'llm.openai.thinkingMode': document.getElementById('openai-thinking-mode').checked,
+        'llm.openai.showThinking': document.getElementById('openai-show-thinking').checked,
         'llm.ollama.baseURL': document.getElementById('ollama-base-url').value,
         'llm.ollama.model': document.getElementById('ollama-model-name').value,
     };
@@ -457,8 +526,12 @@ export function loadLLMSettings() {
     // Populate UI from cached settings
     document.getElementById('gemini-api-keys').value = Settings.get('llm.gemini.apiKey') || '';
     document.getElementById('gemini-model-selector').value = Settings.get('llm.gemini.model');
+    document.getElementById('gemini-thinking-mode').checked = Settings.get('llm.gemini.thinkingMode') || false;
+    document.getElementById('gemini-show-thinking').checked = Settings.get('llm.gemini.showThinking') !== false;
     document.getElementById('openai-api-key').value = Settings.get('llm.openai.apiKey') || '';
     document.getElementById('openai-model-selector').value = Settings.get('llm.openai.model');
+    document.getElementById('openai-thinking-mode').checked = Settings.get('llm.openai.thinkingMode') || false;
+    document.getElementById('openai-show-thinking').checked = Settings.get('llm.openai.showThinking') !== false;
     document.getElementById('ollama-base-url').value = Settings.get('llm.ollama.baseURL');
     document.getElementById('ollama-model-name').value = Settings.get('llm.ollama.model');
     

@@ -71,6 +71,74 @@ export const ChatService = {
         thinkingIndicator.style.display = isSending ? 'block' : 'none';
     },
 
+    _parseThinkingContent(text, context) {
+        let { thinkingContent, isInThinking, currentThinkingDiv, chatMessages, showThinking } = context;
+        
+        let displayText = '';
+        let remainingText = text;
+        
+        console.log('🤔 Parsing text chunk:', JSON.stringify(text), 'isInThinking:', isInThinking);
+        
+        // Handle thinking tag parsing
+        while (remainingText.length > 0) {
+            if (remainingText.includes('<thinking>') && !isInThinking) {
+                const thinkingStart = remainingText.indexOf('<thinking>');
+                const beforeThinking = remainingText.substring(0, thinkingStart);
+                remainingText = remainingText.substring(thinkingStart + '<thinking>'.length);
+                
+                displayText += beforeThinking;
+                isInThinking = true;
+                thinkingContent = ''; // Reset thinking content
+                
+                console.log('🤔 STARTING thinking mode, showThinking:', showThinking);
+                if (showThinking) {
+                    // Test the UI function directly
+                    console.log('🤔 About to call UI.appendThinkingMessage');
+                    currentThinkingDiv = UI.appendThinkingMessage(chatMessages, 'Starting to think...', true);
+                    console.log('🤔 Created thinking div:', currentThinkingDiv);
+                }
+            } else if (remainingText.includes('</thinking>') && isInThinking) {
+                const thinkingEnd = remainingText.indexOf('</thinking>');
+                const thinkingPart = remainingText.substring(0, thinkingEnd);
+                remainingText = remainingText.substring(thinkingEnd + '</thinking>'.length);
+                
+                thinkingContent += thinkingPart;
+                isInThinking = false;
+                
+                console.log('🤔 ENDING thinking mode, final content length:', thinkingContent.length);
+                // Update thinking display with complete content
+                if (currentThinkingDiv && showThinking) {
+                    UI.appendThinkingMessage(chatMessages, thinkingContent, false);
+                    UI.finalizeThinkingMessage(currentThinkingDiv);
+                    console.log('🤔 Finalized thinking message');
+                    currentThinkingDiv = null;
+                }
+                
+                thinkingContent = '';
+                // Continue processing remaining text after </thinking>
+            } else if (isInThinking) {
+                // We're inside thinking tags, accumulate all remaining content
+                thinkingContent += remainingText;
+                console.log('🤔 Accumulating thinking content, total length:', thinkingContent.length);
+                if (currentThinkingDiv && showThinking) {
+                    UI.appendThinkingMessage(chatMessages, thinkingContent, true);
+                }
+                break; // Exit loop since we've processed all text
+            } else {
+                // Normal content, not in thinking - add all remaining text
+                displayText += remainingText;
+                break; // Exit loop since we've processed all text
+            }
+        }
+        
+        return { 
+            thinkingContent, 
+            isInThinking, 
+            currentThinkingDiv,
+            displayText
+        };
+    },
+
     async _handleRateLimiting(chatMessages) {
         const now = Date.now();
         const timeSinceLastRequest = now - this.lastRequestTime;
@@ -131,14 +199,48 @@ export const ChatService = {
                 const stream = this.llmService.sendMessageStream(history, tools, customRules);
 
                 let modelResponseText = '';
+                let displayText = '';
+                let thinkingContent = '';
+                let isInThinking = false;
+                let currentThinkingDiv = null;
                 functionCalls = []; // Reset for this iteration
+                
+                // Check if thinking mode is enabled for current provider
+                const provider = Settings.get('llm.provider') || 'gemini';
+                const thinkingEnabled = document.getElementById(`${provider}-thinking-mode`)?.checked || false;
+                const showThinking = document.getElementById(`${provider}-show-thinking`)?.checked !== false;
 
                 for await (const chunk of stream) {
                     if (this.isCancelled) return;
 
                     if (chunk.text) {
-                        modelResponseText += chunk.text;
-                        UI.appendMessage(chatMessages, modelResponseText, 'ai', true);
+                        const text = chunk.text;
+                        modelResponseText += text;
+                        
+                        if (thinkingEnabled) {
+                            // Parse thinking content when thinking mode is enabled
+                            const updatedContent = this._parseThinkingContent(text, {
+                                thinkingContent,
+                                isInThinking,
+                                currentThinkingDiv,
+                                chatMessages,
+                                showThinking
+                            });
+                            
+                            thinkingContent = updatedContent.thinkingContent;
+                            isInThinking = updatedContent.isInThinking;
+                            currentThinkingDiv = updatedContent.currentThinkingDiv;
+                            
+                            // Only show non-thinking display text
+                            if (updatedContent.displayText) {
+                                displayText += updatedContent.displayText;
+                                UI.appendMessage(chatMessages, displayText, 'ai', true);
+                            }
+                        } else {
+                            // Normal processing without thinking
+                            displayText += text;
+                            UI.appendMessage(chatMessages, displayText, 'ai', true);
+                        }
                     }
                     if (chunk.functionCalls) {
                         functionCalls.push(...chunk.functionCalls);
@@ -148,6 +250,11 @@ export const ChatService = {
                         totalResponseTokens += chunk.usageMetadata.candidatesTokenCount || 0;
                         UI.updateTokenDisplay(totalRequestTokens, totalResponseTokens);
                     }
+                }
+                
+                // Finalize any open thinking message
+                if (currentThinkingDiv) {
+                    UI.finalizeThinkingMessage(currentThinkingDiv);
                 }
 
                 const modelResponseParts = [];

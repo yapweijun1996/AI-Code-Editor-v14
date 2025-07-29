@@ -79,6 +79,15 @@ export class OpenAIService extends BaseLLMService {
                         if (delta.tool_calls) {
                             this._aggregateToolCalls(delta.tool_calls, currentToolCalls);
                         }
+                        
+                        if (json.usage) {
+                            yield {
+                                usageMetadata: {
+                                    promptTokenCount: json.usage.prompt_tokens,
+                                    candidatesTokenCount: json.usage.completion_tokens,
+                                }
+                            };
+                        }
 
                     } catch (e) {
                         console.error('Error parsing OpenAI stream chunk:', data, e);
@@ -188,7 +197,29 @@ export class OpenAIService extends BaseLLMService {
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const timeString = new Date().toLocaleString();
         
-        const baseCodePrompt = `You are GPT, an advanced AI programming agent optimized for precise code generation and tool utilization. Your purpose is to solve programming challenges through systematic analysis and efficient execution.
+        // Check if thinking mode is enabled
+        const thinkingEnabled = document.getElementById('openai-thinking-mode')?.checked || false;
+        
+        const thinkingInstructions = thinkingEnabled ? `
+
+# ADVANCED THINKING MODE (O1-STYLE)
+You MUST use explicit thinking before providing your final response. Follow this format:
+
+<thinking>
+Let me think through this step by step...
+
+1. **Problem Analysis**: What exactly is being asked?
+2. **Approach Planning**: What's the best way to solve this?
+3. **Tool Selection**: Which tools do I need to use?
+4. **Step-by-Step Execution**: How will I implement the solution?
+5. **Quality Check**: Is my approach correct and complete?
+</thinking>
+
+[Your final response here]
+
+**CRITICAL**: Always wrap your reasoning in <thinking></thinking> tags. Show your complete thought process, including any doubts, corrections, or alternative approaches you consider.` : '';
+        
+        const baseCodePrompt = `You are GPT, an advanced AI programming agent optimized for precise code generation and tool utilization. Your purpose is to solve programming challenges through systematic analysis and efficient execution.${thinkingInstructions}
 
 # OPENAI AGENT OPTIMIZATION
 - **Tool Calling Excellence**: You excel at structured function calling. Always use the most appropriate tool for each task.
