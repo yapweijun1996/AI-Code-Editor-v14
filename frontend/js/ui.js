@@ -49,7 +49,7 @@ export function renderTree(treeData, onFileSelect, appState) {
             plugins: ['types', 'contextmenu', 'dnd'],
             contextmenu: {
                 show_at_node: false,
-                items: function (node) {
+                items: function (node, appState) { // Add appState here
                     const tree = $('#file-tree').jstree(true);
                     const isRoot = node.parent === '#';
 
@@ -111,14 +111,16 @@ export function renderTree(treeData, onFileSelect, appState) {
 
                     return items;
                 }
-            }
+            },
+            _appState: appState // Pass appState to the contextmenu plugin
         })
         .on('contextmenu', function (e) {
             e.preventDefault();
             const tree = $(this).jstree(true);
             const node = tree.get_node(e.target);
             if (node) {
-                tree.show_contextmenu(node, e.pageX, e.pageY);
+                // Pass appState to show_contextmenu as well
+                tree.show_contextmenu(node, e.pageX, e.pageY, tree.settings._appState);
             }
         })
         .on('rename_node.jstree', async function (e, data) {
@@ -221,36 +223,139 @@ export function appendThinkingMessage(chatMessages, text, isStreaming = false) {
 
     if (!thinkingDiv) {
         thinkingDiv = document.createElement('div');
-        thinkingDiv.className = 'chat-message thinking-message';
+        thinkingDiv.className = 'chat-message thinking-message active';
+        thinkingDiv.setAttribute('role', 'region');
+        thinkingDiv.setAttribute('aria-label', 'AI thinking process');
         
+        // Create header with enhanced elements
         const header = document.createElement('div');
         header.className = 'thinking-header';
-        header.innerHTML = '🤔 <strong>AI is thinking...</strong>';
         
-        const content = document.createElement('div');
-        content.className = 'thinking-content';
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'thinking-status';
+        
+        const icon = document.createElement('span');
+        icon.className = 'thinking-icon spinning';
+        icon.textContent = '🧠';
+        icon.setAttribute('aria-hidden', 'true');
+        
+        const statusText = document.createElement('span');
+        statusText.innerHTML = '<strong>AI is thinking...</strong>';
+        
+        statusDiv.appendChild(icon);
+        statusDiv.appendChild(statusText);
+        
+        // Create meta information section
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'thinking-meta';
+        
+        const timer = document.createElement('div');
+        timer.className = 'thinking-timer';
+        timer.innerHTML = '⏱️ <span class="timer-value">0s</span>';
+        
+        const wordCount = document.createElement('div');
+        wordCount.className = 'thinking-word-count';
+        wordCount.textContent = '0 words';
         
         const toggle = document.createElement('button');
         toggle.className = 'thinking-toggle';
         toggle.textContent = 'Show reasoning';
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-controls', 'thinking-content-' + Date.now());
+        
+        metaDiv.appendChild(timer);
+        metaDiv.appendChild(wordCount);
+        metaDiv.appendChild(toggle);
+        
+        header.appendChild(statusDiv);
+        header.appendChild(metaDiv);
+        
+        // Create content area
+        const content = document.createElement('div');
+        content.className = 'thinking-content collapsed';
+        content.id = toggle.getAttribute('aria-controls');
+        content.setAttribute('aria-hidden', 'true');
+        
+        // Enhanced toggle functionality with animations
         toggle.onclick = () => {
-            const isVisible = content.style.display !== 'none';
-            content.style.display = isVisible ? 'none' : 'block';
-            toggle.textContent = isVisible ? 'Show reasoning' : 'Hide reasoning';
+            const isCollapsed = content.classList.contains('collapsed');
+            
+            if (isCollapsed) {
+                content.classList.remove('collapsed');
+                content.classList.add('expanding');
+                content.setAttribute('aria-hidden', 'false');
+                toggle.textContent = 'Hide reasoning';
+                toggle.classList.add('expanded');
+                toggle.setAttribute('aria-expanded', 'true');
+                
+                setTimeout(() => {
+                    content.classList.remove('expanding');
+                }, 300);
+            } else {
+                content.classList.add('collapsing');
+                toggle.textContent = 'Show reasoning';
+                toggle.classList.remove('expanded');
+                toggle.setAttribute('aria-expanded', 'false');
+                
+                setTimeout(() => {
+                    content.classList.remove('collapsing');
+                    content.classList.add('collapsed');
+                    content.setAttribute('aria-hidden', 'true');
+                }, 300);
+            }
         };
         
-        header.appendChild(toggle);
+        // Add progress indicator
+        const progress = document.createElement('div');
+        progress.className = 'thinking-progress';
+        progress.style.width = '0%';
+        
         thinkingDiv.appendChild(header);
         thinkingDiv.appendChild(content);
+        thinkingDiv.appendChild(progress);
         
-        // Initially hide content
-        content.style.display = 'none';
+        // Start timer
+        const startTime = Date.now();
+        const timerInterval = setInterval(() => {
+            if (!thinkingDiv.classList.contains('active')) {
+                clearInterval(timerInterval);
+                return;
+            }
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const timerValue = timer.querySelector('.timer-value');
+            if (timerValue) {
+                timerValue.textContent = elapsed + 's';
+            }
+        }, 1000);
+        
+        // Store timer reference for cleanup
+        thinkingDiv._timerInterval = timerInterval;
         
         chatMessages.appendChild(thinkingDiv);
     }
 
     const content = thinkingDiv.querySelector('.thinking-content');
-    content.innerHTML = DOMPurify.sanitize(marked.parse(text || ''));
+    const wordCount = thinkingDiv.querySelector('.thinking-word-count');
+    const progress = thinkingDiv.querySelector('.thinking-progress');
+    
+    if (content && text) {
+        content.innerHTML = DOMPurify.sanitize(marked.parse(text || ''));
+        
+        // Update word count
+        if (wordCount) {
+            const words = text.trim().split(/\s+/).length;
+            wordCount.textContent = words + ' words';
+        }
+        
+        // Update progress (simulate based on content length)
+        if (progress) {
+            const maxLength = 2000; // Estimated max thinking length
+            const currentLength = text.length;
+            const progressPercent = Math.min(100, (currentLength / maxLength) * 100);
+            progress.style.width = progressPercent + '%';
+        }
+    }
+    
     thinkingDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
     
     return thinkingDiv;
@@ -258,11 +363,45 @@ export function appendThinkingMessage(chatMessages, text, isStreaming = false) {
 
 export function finalizeThinkingMessage(thinkingDiv) {
     if (thinkingDiv && thinkingDiv.classList.contains('thinking-message')) {
-        const header = thinkingDiv.querySelector('.thinking-header');
-        const toggle = header.querySelector('.thinking-toggle');
-        header.innerHTML = '💡 <strong>AI reasoning:</strong> ';
-        header.appendChild(toggle);
+        // Clear timer
+        if (thinkingDiv._timerInterval) {
+            clearInterval(thinkingDiv._timerInterval);
+        }
+        
+        // Update status
+        const statusDiv = thinkingDiv.querySelector('.thinking-status');
+        const icon = thinkingDiv.querySelector('.thinking-icon');
+        const progress = thinkingDiv.querySelector('.thinking-progress');
+        
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <span class="thinking-icon">💡</span>
+                <span><strong>AI reasoning complete</strong></span>
+            `;
+        }
+        
+        if (icon) {
+            icon.classList.remove('spinning');
+        }
+        
+        if (progress) {
+            progress.style.width = '100%';
+        }
+        
+        // Add completion styling
+        thinkingDiv.classList.remove('active');
         thinkingDiv.classList.add('thinking-complete');
+        
+        // Update accessibility
+        thinkingDiv.setAttribute('aria-label', 'AI reasoning complete');
+        
+        // Add a subtle completion animation
+        setTimeout(() => {
+            thinkingDiv.style.transform = 'scale(1.02)';
+            setTimeout(() => {
+                thinkingDiv.style.transform = 'scale(1)';
+            }, 200);
+        }, 100);
     }
 }
 
