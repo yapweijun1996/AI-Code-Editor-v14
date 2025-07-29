@@ -298,7 +298,9 @@ export function renderToolLogs(logsListContainer, logs, filterText = '') {
     // Newest first
     logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    const filteredLogs = logs.filter(log => log.toolName.toLowerCase().includes(filterText.toLowerCase()));
+    const filteredLogs = logs.filter(log => 
+        log.toolName && log.toolName.toLowerCase().includes(filterText.toLowerCase())
+    );
 
     if (filteredLogs.length === 0) {
         logsListContainer.innerHTML = '<p>No matching tool logs found.</p>';
@@ -307,16 +309,16 @@ export function renderToolLogs(logsListContainer, logs, filterText = '') {
 
     filteredLogs.forEach(log => {
         const card = document.createElement('div');
-        card.className = `tool-log-card ${log.status.toLowerCase()}`;
+        card.className = `tool-log-card ${(log.status || 'unknown').toLowerCase()}`;
 
         const header = document.createElement('div');
         header.className = 'tool-log-card-header';
         header.innerHTML = `
             <div class="tool-log-card-title">
-                <span class="log-status-badge ${log.status.toLowerCase()}">${log.status}</span>
-                <strong class="log-tool-name">${log.toolName}</strong>
+                <span class="log-status-badge ${(log.status || 'unknown').toLowerCase()}">${log.status || 'Unknown'}</span>
+                <strong class="log-tool-name">${log.toolName || 'Unknown Tool'}</strong>
             </div>
-            <span class="log-timestamp">${new Date(log.timestamp).toLocaleString()}</span>
+            <span class="log-timestamp">${new Date(log.timestamp || Date.now()).toLocaleString()}</span>
         `;
         header.addEventListener('click', () => {
             card.classList.toggle('expanded');
@@ -327,10 +329,10 @@ export function renderToolLogs(logsListContainer, logs, filterText = '') {
         content.className = 'tool-log-card-content';
         
         const paramsPre = document.createElement('pre');
-        paramsPre.textContent = `Parameters: ${JSON.stringify(log.params, null, 2)}`;
+        paramsPre.textContent = `Parameters: ${JSON.stringify(log.params || {}, null, 2)}`;
         
         const resultPre = document.createElement('pre');
-        resultPre.textContent = `Result: ${JSON.stringify(log.result, null, 2)}`;
+        resultPre.textContent = `Result: ${JSON.stringify(log.result || {}, null, 2)}`;
         
         content.appendChild(paramsPre);
         content.appendChild(resultPre);

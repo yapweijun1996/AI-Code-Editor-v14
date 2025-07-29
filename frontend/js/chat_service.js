@@ -119,7 +119,9 @@ export const ChatService = {
         history.push({ role: 'user', parts: initialParts });
 
         let functionCalls;
-        do {
+        let continueLoop = true;
+        
+        while (continueLoop && !this.isCancelled) {
             try {
                 const mode = document.getElementById('agent-mode-selector').value;
                 const customRules = Settings.get(`custom.${mode}.rules`);
@@ -152,9 +154,11 @@ export const ChatService = {
                 }
 
                 if (functionCalls.length > 0) {
+                    // Execute all tools sequentially for all providers
                     const toolResults = [];
                     for (const call of functionCalls) {
                         if (this.isCancelled) return;
+                        console.log(`Executing tool: ${call.name} sequentially...`);
                         const result = await ToolExecutor.execute(call, this.rootDirectoryHandle);
                         toolResults.push({
                             id: call.id,
@@ -163,15 +167,26 @@ export const ChatService = {
                         });
                     }
                     history.push({ role: 'user', parts: toolResults.map(functionResponse => ({ functionResponse })) });
+                    
+                    // For OpenAI: Continue the loop to get AI's next response
+                    // For other providers: Exit the loop after all tools are executed
+                    if (this.llmService.constructor.name === 'OpenAIService') {
+                        continueLoop = true;
+                    } else {
+                        continueLoop = false;
+                    }
+                } else {
+                    // No tools called, conversation is complete
+                    continueLoop = false;
                 }
 
             } catch (error) {
                 console.error(`Error during API call with ${this.llmService.constructor.name}:`, error);
                 console.error(`Error stack:`, error.stack); // Log the stack trace
                 UI.showError(`An error occurred during AI communication: ${error.message}. Please check your API key and network connection.`);
-                functionCalls = [];
+                continueLoop = false;
             }
-        } while (functionCalls.length > 0 && !this.isCancelled);
+        }
 
         await DbManager.saveChatHistory(history);
     },
