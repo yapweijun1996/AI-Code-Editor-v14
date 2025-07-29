@@ -64,6 +64,7 @@ export function initializeEventListeners(appState) {
     const viewToolLogsButton = document.getElementById('view-tool-logs-button');
     const toolLogsModal = document.getElementById('tool-logs-modal');
     const toolLogsList = document.getElementById('tool-logs-list');
+    const toolLogsFilter = document.getElementById('tool-logs-filter');
     const closeToolLogsModalButton = toolLogsModal.querySelector('.close-button');
     const undoButton = document.getElementById('undo-last-change-button');
     const filesTab = document.getElementById('files-tab');
@@ -432,6 +433,10 @@ export function initializeEventListeners(appState) {
         const logs = await ToolLogger.getLogs();
         UI.renderToolLogs(toolLogsList, logs);
         toolLogsModal.style.display = 'block';
+
+        toolLogsFilter.addEventListener('input', () => {
+            UI.renderToolLogs(toolLogsList, logs, toolLogsFilter.value);
+        });
     });
 
     closeToolLogsModalButton.addEventListener('click', () => {

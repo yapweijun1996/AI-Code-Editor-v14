@@ -287,7 +287,7 @@ export function showError(message, duration = 5000) {
     }, duration);
 }
 
-export function renderToolLogs(logsListContainer, logs) {
+export function renderToolLogs(logsListContainer, logs, filterText = '') {
     logsListContainer.innerHTML = '';
     if (!logs || logs.length === 0) {
         logsListContainer.innerHTML = '<p>No tool executions have been logged yet.</p>';
@@ -297,20 +297,33 @@ export function renderToolLogs(logsListContainer, logs) {
     // Newest first
     logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    logs.forEach(log => {
-        const entry = document.createElement('details');
-        entry.className = 'tool-log-entry-details';
+    const filteredLogs = logs.filter(log => log.toolName.toLowerCase().includes(filterText.toLowerCase()));
 
-        const summary = document.createElement('summary');
-        summary.className = `tool-log-summary ${log.status.toLowerCase()}`;
-        summary.innerHTML = `
-            <span class="log-status">${log.status === 'Success' ? '✔' : '✖'}</span>
-            <strong class="log-tool-name">${log.toolName}</strong>
+    if (filteredLogs.length === 0) {
+        logsListContainer.innerHTML = '<p>No matching tool logs found.</p>';
+        return;
+    }
+
+    filteredLogs.forEach(log => {
+        const card = document.createElement('div');
+        card.className = `tool-log-card ${log.status.toLowerCase()}`;
+
+        const header = document.createElement('div');
+        header.className = 'tool-log-card-header';
+        header.innerHTML = `
+            <div class="tool-log-card-title">
+                <span class="log-status-badge ${log.status.toLowerCase()}">${log.status}</span>
+                <strong class="log-tool-name">${log.toolName}</strong>
+            </div>
             <span class="log-timestamp">${new Date(log.timestamp).toLocaleString()}</span>
         `;
+        header.addEventListener('click', () => {
+            card.classList.toggle('expanded');
+        });
+
 
         const content = document.createElement('div');
-        content.className = 'tool-log-content';
+        content.className = 'tool-log-card-content';
         
         const paramsPre = document.createElement('pre');
         paramsPre.textContent = `Parameters: ${JSON.stringify(log.params, null, 2)}`;
@@ -321,9 +334,9 @@ export function renderToolLogs(logsListContainer, logs) {
         content.appendChild(paramsPre);
         content.appendChild(resultPre);
 
-        entry.appendChild(summary);
-        entry.appendChild(content);
-        logsListContainer.appendChild(entry);
+        card.appendChild(header);
+        card.appendChild(content);
+        logsListContainer.appendChild(card);
     });
 }
 export async function updateIndexedDBUsage() {
