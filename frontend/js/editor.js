@@ -1,5 +1,5 @@
 import { getFileHandleFromPath } from './file_system.js';
-import { GeminiChat } from './gemini_chat.js';
+import { ChatService } from './chat_service.js';
 
 let editor;
 let openFiles = new Map(); // Key: filePath (string), Value: { handle, name, model, viewState }
@@ -158,7 +158,7 @@ export function initializeEditor(editorContainer, tabBarContainer) {
                     const thinkingIndicator = document.getElementById('thinking-indicator');
                     
                     chatInput.value = prompt;
-                    GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
+                    ChatService.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
                 }
             });
 

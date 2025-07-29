@@ -1,6 +1,6 @@
 import { DbManager } from './db.js';
 import { ApiKeyManager } from './api_manager.js';
-import { GeminiChat } from './gemini_chat.js';
+import { ChatService } from './chat_service.js';
 import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import * as FileSystem from './file_system.js';
@@ -80,8 +80,6 @@ export function initializeEventListeners(appState) {
 
     window.addEventListener('beforeunload', saveCurrentSession);
 
-    initializeLLMSettingsEventListeners();
-
     let saveTimeout;
     editorContainer.addEventListener('keyup', () => {
         clearTimeout(saveTimeout);
@@ -97,7 +95,7 @@ export function initializeEventListeners(appState) {
             appState.rootDirectoryHandle = await window.showDirectoryPicker();
             await DbManager.saveDirectoryHandle(appState.rootDirectoryHandle);
             await UI.refreshFileTree(appState.rootDirectoryHandle, onFileSelect);
-            GeminiChat.rootDirectoryHandle = appState.rootDirectoryHandle; // Update the handle
+            ChatService.rootDirectoryHandle = appState.rootDirectoryHandle; // Update the handle
         } catch (error) {
             console.error('Error opening directory:', error);
         }
@@ -120,7 +118,7 @@ export function initializeEventListeners(appState) {
                 if ((await savedHandle.requestPermission({ mode: 'readwrite' })) === 'granted') {
                     appState.rootDirectoryHandle = savedHandle;
                     await UI.refreshFileTree(appState.rootDirectoryHandle, onFileSelect);
-                    GeminiChat.rootDirectoryHandle = appState.rootDirectoryHandle; // Update the handle
+                    ChatService.rootDirectoryHandle = appState.rootDirectoryHandle; // Update the handle
                 } else {
                     alert('Permission to access the folder was denied.');
                 }
@@ -131,13 +129,13 @@ export function initializeEventListeners(appState) {
         }
     });
 
-    chatSendButton.addEventListener('click', () => GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, appState.uploadedImage, clearImagePreview));
-    chatCancelButton.addEventListener('click', () => GeminiChat.cancelMessage());
+    chatSendButton.addEventListener('click', () => ChatService.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, appState.uploadedImage, clearImagePreview));
+    chatCancelButton.addEventListener('click', () => ChatService.cancelMessage());
 
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, appState.uploadedImage, clearImagePreview);
+            ChatService.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, appState.uploadedImage, clearImagePreview);
         }
     });
 
@@ -150,12 +148,12 @@ export function initializeEventListeners(appState) {
 
 
     viewContextButton.addEventListener('click', async () => {
-        contextDisplay.textContent = await GeminiChat.viewHistory();
+        contextDisplay.textContent = await ChatService.viewHistory();
         contextModal.style.display = 'block';
     });
 
-    condenseContextButton.addEventListener('click', () => GeminiChat.condenseHistory(chatMessages));
-    clearContextButton.addEventListener('click', () => GeminiChat.clearHistory(chatMessages));
+    condenseContextButton.addEventListener('click', () => ChatService.condenseHistory(chatMessages));
+    clearContextButton.addEventListener('click', () => ChatService.clearHistory(chatMessages));
 
     closeModalButton.addEventListener('click', () => {
         contextModal.style.display = 'none';
@@ -430,7 +428,7 @@ export function initializeEventListeners(appState) {
     });
 
     undoButton.addEventListener('click', () => {
-        GeminiChat.runToolDirectly('undo_last_change', {});
+        ChatService.runToolDirectly('undo_last_change', {});
     });
 
     if (filesTab && searchTab && tasksTab && filesContent && searchContent && tasksContent) {
@@ -545,34 +543,4 @@ export function initializeEventListeners(appState) {
             tasksContainer.appendChild(button);
         }
     }
-}
-
-function initializeLLMSettingsEventListeners() {
-    const settingsPanel = document.getElementById('llm-settings-panel');
-    if (!settingsPanel) return;
-
-    const tabsContainer = settingsPanel.querySelector('.settings-tabs');
-    const tabContents = settingsPanel.querySelectorAll('.tab-content');
-    const saveButton = document.getElementById('save-llm-settings-button');
-
-    tabsContainer.addEventListener('click', (event) => {
-        if (event.target.tagName === 'BUTTON') {
-            const tabName = event.target.dataset.tab;
-            
-            tabsContainer.querySelectorAll('.tab-link').forEach(tab => tab.classList.remove('active'));
-            event.target.classList.add('active');
-
-            tabContents.forEach(content => {
-                if (content.id === tabName) {
-                    content.classList.add('active');
-                } else {
-                    content.classList.remove('active');
-                }
-            });
-        }
-    });
-
-    saveButton.addEventListener('click', () => {
-        UI.saveLLMSettings();
-    });
 }

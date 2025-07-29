@@ -6,7 +6,7 @@ import * as ToolExecutor from './tool_executor.js';
 import * as Editor from './editor.js';
 import * as UI from './ui.js';
 
-export const GeminiChat = {
+export const ChatService = {
     isSending: false,
     isCancelled: false,
     llmService: null,

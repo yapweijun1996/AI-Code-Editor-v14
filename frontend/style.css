@@ -1165,3 +1165,31 @@ button:hover {
 .toast.error {
     border-color: #dc3545;
 }
+
+#llm-status-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 15px; /* Pill shape */
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#llm-status-container:hover {
+    background-color: var(--editor-tab-bg);
+}
+
+.status-label {
+    color: var(--secondary);
+    font-weight: 500;
+}
+
+#llm-provider-status {
+    color: var(--primary);
+    font-weight: bold;
+    text-transform: capitalize;
+}

@@ -3,7 +3,7 @@ import { CodebaseIndexer } from './code_intel.js';
 import * as FileSystem from './file_system.js';
 import * as Editor from './editor.js';
 import * as UI from './ui.js';
-import { GeminiChat } from './gemini_chat.js';
+import { ChatService } from './chat_service.js';
 
 // --- Helper Functions ---
 
@@ -891,8 +891,8 @@ export async function execute(toolCall, rootDirectoryHandle) {
 
             if (errors.length > 0) {
                const errorSignature = errors.map(e => `L${e.startLineNumber}:${e.message}`).join('|');
-               GeminiChat.trackError(filePath, errorSignature);
-               const attemptCount = GeminiChat.getConsecutiveErrorCount(filePath, errorSignature);
+               ChatService.trackError(filePath, errorSignature);
+               const attemptCount = ChatService.getConsecutiveErrorCount(filePath, errorSignature);
                const MAX_ATTEMPTS = 3;
 
                if (attemptCount >= MAX_ATTEMPTS) {
@@ -900,7 +900,7 @@ export async function execute(toolCall, rootDirectoryHandle) {
                    resultForModel = { error: circuitBreakerMsg, feedback: 'STOP' };
                    UI.showError(circuitBreakerMsg, 10000);
                    console.error(circuitBreakerMsg);
-                   GeminiChat.resetErrorTracker();
+                   ChatService.resetErrorTracker();
                } else {
                    isSuccess = false;
                    const errorMessages = errors.map(e => `L${e.startLineNumber}: ${e.message}`).join('\n');
@@ -911,7 +911,7 @@ export async function execute(toolCall, rootDirectoryHandle) {
                    console.error(errorMessage);
                }
             } else {
-               GeminiChat.resetErrorTracker();
+              ChatService.resetErrorTracker();
             }
         }
     }

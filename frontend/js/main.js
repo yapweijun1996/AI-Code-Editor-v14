@@ -1,5 +1,5 @@
 import { Settings, dispatchLLMSettingsUpdated } from './settings.js';
-import { GeminiChat } from './gemini_chat.js';
+import { ChatService } from './chat_service.js';
 import * as Editor from './editor.js';
 import * as UI from './ui.js';
 import * as FileSystem from './file_system.js';
@@ -68,18 +68,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     await Settings.initialize();
     await tryRestoreDirectory();
     
-    // Setup UI with cached settings
-    UI.setupLLMSettingsPanel();
+    // Setup one-time UI event listeners
+    UI.initializeUI();
 
     if (appState.rootDirectoryHandle) {
-        await GeminiChat.initialize(appState.rootDirectoryHandle);
+        await ChatService.initialize(appState.rootDirectoryHandle);
     }
     
     // Listen for settings changes to re-initialize the chat service
     document.addEventListener('llm-settings-updated', async () => {
         console.log('LLM settings updated, re-initializing chat service...');
+        UI.updateLLMProviderStatus();
         if (appState.rootDirectoryHandle) {
-            await GeminiChat.initialize(appState.rootDirectoryHandle);
+            await ChatService.initialize(appState.rootDirectoryHandle);
         }
     });
 
@@ -143,8 +144,7 @@ Analyze the code and provide the necessary changes to resolve these issues.
         `;
 
         chatInput.value = prompt.trim();
-        GeminiChat.resetErrorTracker();
-        GeminiChat.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
+        ChatService.sendMessage(chatInput, chatMessages, chatSendButton, chatCancelButton, thinkingIndicator, null, () => {});
     };
 
     const openDirectoryButton = document.getElementById('open-directory-button');

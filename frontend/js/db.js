@@ -207,6 +207,19 @@ export const DbManager = {
             request.onsuccess = () => resolve();
         });
     },
+
+    async getAllFromStore(storeName) {
+        const db = await this.openDb();
+        return new Promise((resolve) => {
+            const request = db
+                .transaction(storeName, 'readonly')
+                .objectStore(storeName)
+                .getAll();
+            request.onerror = () => resolve([]);
+            request.onsuccess = () => resolve(request.result || []);
+        });
+    },
+
     async saveSetting(settingId, value) {
         const db = await this.openDb();
         return new Promise((resolve, reject) => {

@@ -5,7 +5,7 @@ export const Settings = {
     // Default settings
     defaults: {
         'llm.provider': 'gemini',
-        'llm.gemini.model': 'gemini-1.5-flash-latest',
+        'llm.gemini.model': 'gemini-2.5-flash',
         'llm.openai.model': 'gpt-4o',
         'llm.ollama.model': 'llama3',
         'llm.ollama.baseURL': 'http://localhost:11434',
@@ -19,15 +19,21 @@ export const Settings = {
      * Initializes the settings module, loading all settings from the database.
      */
     async initialize() {
-        const allSettings = await DbManager.getAllSettings();
+        // 1. Load all default settings into the cache first.
         for (const key in this.defaults) {
-            const storedValue = allSettings.find(s => s.key === key)?.value;
-            this.cache.set(key, storedValue ?? this.defaults[key]);
+            this.cache.set(key, this.defaults[key]);
+        }
+
+        // 2. Fetch all stored settings from the database.
+        const allSettings = await DbManager.getAllFromStore(DbManager.stores.settings);
+
+        // 3. Overwrite the defaults with any stored values.
+        for (const setting of allSettings) {
+            this.cache.set(setting.id, setting.value);
         }
         console.log('Settings initialized and loaded into cache.');
         
-        // Ensure the ApiKeyManager is also initialized
-        await ApiKeyManager.initialize();
+        // ApiKeyManager is now loaded on-demand, no explicit initialization needed.
     },
 
     /**
