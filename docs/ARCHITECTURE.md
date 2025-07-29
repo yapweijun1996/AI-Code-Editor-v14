@@ -10,7 +10,10 @@ The application is architected to be **secure and frontend-heavy**. The majority
 
 *   **Frontend**: A single-page application built with vanilla JavaScript, HTML, and CSS. It uses the Monaco Editor and manages all core application logic.
 *   **Backend**: A lightweight Node.js/Express server that serves static files and provides sandboxed execution for terminal commands and URL fetching.
-*   **AI Agent**: The Gemini agent logic is managed entirely on the client-side in `frontend/js/gemini_chat.js`, which defines all available tools and orchestrates the interaction with the model.
+*   **AI Agents**: Multi-provider AI system managed entirely on the client-side with:
+    *   **Service Factory** (`frontend/js/llm/service_factory.js`) - Creates appropriate LLM service instances
+    *   **Provider Services** - Gemini, OpenAI, and Ollama service implementations
+    *   **Chat Service** (`frontend/js/chat_service.js`) - Orchestrates interactions with all providers
 
 ## Frontend Code Logic Flow
 
@@ -21,51 +24,118 @@ graph TD
     subgraph User Interface
         A[main.js]
         B[ui.js]
+        S[settings.js]
+    end
+
+    subgraph LLM Services
+        CS[chat_service.js]
+        SF[llm/service_factory.js]
+        GS[llm/gemini_service.js]
+        OS[llm/openai_service.js]
+        OLS[llm/ollama_service.js]
+        BS[llm/base_llm_service.js]
     end
 
     subgraph Core Logic
-        C[gemini_chat.js]
         D[tool_executor.js]
+        TL[tool_logger.js]
+        UM[undo_manager.js]
     end
 
     subgraph Data & State
         E[db.js]
         F[api_manager.js]
+        CI[code_intel.js]
     end
 
     subgraph Editor & Files
         G[editor.js]
         H[file_system.js]
+        EV[events.js]
     end
 
     A -- Initializes & Orchestrates --> G
-    A -- Handles User Input & Events --> C
+    A -- Handles User Input & Events --> CS
     A -- Uses --> B
-    C -- Uses --> D
-    C -- Uses --> F
+    CS -- Creates Services --> SF
+    SF -- Instantiates --> GS
+    SF -- Instantiates --> OS
+    SF -- Instantiates --> OLS
+    GS -- Extends --> BS
+    OS -- Extends --> BS
+    OLS -- Extends --> BS
+    CS -- Uses --> D
+    CS -- Uses --> F
     D -- Executes Tools --> H
     D -- Executes Tools --> G
-    G -- Manages Monaco Instance & Tabs --> A
+    D -- Logs Actions --> TL
+    D -- Manages History --> UM
+    G -- Manages Monaco Instance --> A
     E -- Manages IndexedDB --> A
-    E -- Manages IndexedDB --> C
-    F -- Manages API Keys --> C
+    E -- Manages IndexedDB --> CS
+    F -- Manages API Keys --> CS
+    S -- Manages Configuration --> CS
+    CI -- Indexes Codebase --> D
+    EV -- Handles Events --> A
+```
 
-    linkStyle 0 stroke:#66c2a5,stroke-width:2px;
-    linkStyle 1 stroke:#66c2a5,stroke-width:2px;
-    linkStyle 2 stroke:#fc8d62,stroke-width:2px;
-    linkStyle 3 stroke:#8da0cb,stroke-width:2px;
-    linkStyle 4 stroke:#8da0cb,stroke-width:2px;
-    linkStyle 5 stroke:#e78ac3,stroke-width:2px;
-    linkStyle 6 stroke:#e78ac3,stroke-width:2px;
-    linkStyle 7 stroke:#a6d854,stroke-width:2px;
-    linkStyle 8 stroke:#ffd92f,stroke-width:2px;
-    linkStyle 9 stroke:#ffd92f,stroke-width:2px;
-    linkStyle 10 stroke:#b3b3b3,stroke-width:2px;
+## Multi-Provider LLM Architecture
+
+The application supports multiple AI providers through a unified interface:
+
+### Provider Hierarchy
+```mermaid
+classDiagram
+    class BaseLLMService {
+        +apiKeyManager
+        +model
+        +isConfigured()
+        +sendMessageStream()*
+    }
+    
+    class GeminiService {
+        +apiBaseUrl
+        +loadKeys()
+        +getCurrentKey()
+        +_isRetryableError()
+        +_prepareMessages()
+    }
+    
+    class OpenAIService {
+        +apiBaseUrl
+        +_prepareMessages()
+        +_prepareTools()
+        +_aggregateToolCalls()
+    }
+    
+    class OllamaService {
+        +customConfig
+        +_prepareMessages()
+    }
+
+    BaseLLMService <|-- GeminiService
+    BaseLLMService <|-- OpenAIService
+    BaseLLMService <|-- OllamaService
+```
+
+### API Key Rotation (Gemini Only)
+
+Gemini service implements automatic API key rotation to handle rate limits:
+
+```mermaid
+flowchart TD
+    A[API Request] --> B{Try Current Key}
+    B -->|Success| C[Return Response]
+    B -->|Rate Limit/Auth Error| D{More Keys Available?}
+    D -->|Yes| E[Rotate to Next Key]
+    E --> F[Retry Request]
+    F --> B
+    D -->|No| G[Throw Final Error]
 ```
 
 ## End-to-End Workflow
 
-This diagram illustrates the primary interaction flow between the user, frontend, backend, and the Gemini AI.
+This diagram illustrates the primary interaction flow between the user, frontend, backend, and AI providers.
 
 ```mermaid
 sequenceDiagram

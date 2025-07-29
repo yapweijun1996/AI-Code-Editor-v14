@@ -40,6 +40,9 @@
     "Core Philosophy: Client-Centric Design",
     "Component Overview",
     "Frontend Code Logic Flow",
+    "Multi-Provider LLM Architecture",
+    "Provider Hierarchy",
+    "API Key Rotation (Gemini Only)",
     "End-to-End Workflow",
     "State Management",
     "System Stability and Error Handling",
@@ -95,6 +98,7 @@
   ],
   "docs/ROADMAP.md": [
     "Incremental Implementation Roadmap for Advanced Features",
+    "Recently Completed Features ✅",
     "1. AI-Powered Git Management",
     "2. Enhanced Search and Replace",
     "3. Enhanced Task Runner"

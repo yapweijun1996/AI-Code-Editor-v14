@@ -1,6 +1,6 @@
 # AI-Powered Browser-Based Code Editor
 
-This project is a sophisticated, browser-based code editor that integrates a powerful AI agent (Google's Gemini) to assist with a wide range of coding tasks. The application is designed with a secure, client-centric architecture, ensuring that all file system operations run directly in the browser, providing a seamless and safe user experience.
+This project is a sophisticated, browser-based code editor that integrates powerful AI agents to assist with a wide range of coding tasks. The application supports multiple LLM providers including **Google Gemini**, **OpenAI GPT**, and **Ollama**, designed with a secure, client-centric architecture where all file system operations run directly in the browser, providing a seamless and safe user experience.
 
 ---
 
@@ -8,7 +8,7 @@ This project is a sophisticated, browser-based code editor that integrates a pow
 
 The editor's architecture has been streamlined to use a local Node.js server, simplifying setup and management.
 
-*   **Local Node.js Server**: A lightweight `Express` server (`index.js`) now serves the `frontend` assets, making the application accessible at `http://localhost:3000`. This approach provides a stable and consistent runtime environment.
+*   **Local Node.js Server**: A lightweight `Express` server (`backend/index.js`) serves the `frontend` assets, making the application accessible at `http://localhost:3333`. This approach provides a stable and consistent runtime environment.
 
 *   **Client-Centric File Operations**: All core logic and file system interactions remain securely on the client-side in `frontend/js/main.js`. The application uses the browser's native **File System Access API**, ensuring that all file operations are handled directly and safely by the user's browser.
 
@@ -19,24 +19,51 @@ The editor's architecture has been streamlined to use a local Node.js server, si
 ## Features
 
 *   **Monaco Editor**: Integrates the same powerful editor used in VS Code, providing a rich and familiar coding environment with syntax highlighting and advanced editing features.
-*   **Gemini AI Agent**: A stateful AI assistant powered by the **Google Gemini API** (`v1beta`) and its official tool-calling capabilities. This ensures a reliable and predictable conversational loop:
-    1.  **Tool Declaration**: The frontend formally declares its available functions to the Gemini API.
-    2.  **Function Call**: The AI responds with a structured `functionCall` when it needs to use a tool.
-    3.  **Frontend Execution**: The browser executes the requested function (e.g., reading a file).
-    4.  **Function Response**: The result is sent back to the AI in a formal `functionResponse`.
-    5.  **Final Answer**: The AI provides a natural-language response to the user.
+*   **Multi-Provider AI Support**: Flexible AI backend supporting multiple providers:
+    *   **Google Gemini**: Latest models including Gemini 2.5 Pro, 2.5 Flash, and 2.5 Flash Lite with automatic API key rotation
+    *   **OpenAI GPT**: Support for GPT-4.1, GPT-4o, o1-preview, o1-mini, and legacy models
+    *   **Ollama**: Local model support for privacy-focused development
+*   **Advanced Tool-Calling System**: All AI providers use a standardized tool-calling interface enabling:
+    1.  **Tool Declaration**: The frontend declares 20+ available functions to the AI
+    2.  **Function Call**: The AI responds with structured function calls when tools are needed
+    3.  **Frontend Execution**: The browser executes requested functions (file operations, code analysis, etc.)
+    4.  **Function Response**: Results are sent back to the AI in a standardized format
+    5.  **Final Answer**: The AI provides natural-language responses based on tool results
 *   **Resizable Panels**: A flexible UI with resizable panels for the file tree, editor, and AI chat.
 *   **Intelligent Tab and File Management**:
     *   **Path-Based Identification**: Open files are tracked by their unique file path, which prevents the creation of duplicate tabs when a file is accessed multiple times.
     *   **Automatic Focus**: When the AI uses a tool like `read_file` or `rewrite_file`, the application automatically opens the relevant file or switches to its existing tab, providing a seamless workflow.
     *   **Stateful UI**: The file tree and open tabs are rendered dynamically, providing a clear and consistent view of the project state.
 *   **Automatic File Opening**: When the AI agent reads, creates, or rewrites a file, it is automatically opened or focused, providing immediate visibility into the agent's actions.
-*   **AST-Powered Code Analysis**: The AI can use the `analyze_code` tool to parse JavaScript code into an Abstract Syntax Tree (AST), enabling a deep, structural understanding of the code for more precise refactoring and analysis.
-*   **Efficient File Modifications**: The AI has access to multiple tools for file modifications, allowing it to choose the most efficient method for each task:
-    *   **`insert_content`**: Inserts content at a specific line number, perfect for adding new functions or blocks of code.
-    *   **`replace_selected_text`**: Replaces only the currently selected text, offering a highly performant option for iterative refactoring.
-    *   **`create_and_apply_diff`**: Performs a line-based comparison of the file's original and new content to create and apply a patch. This method is highly efficient for targeted changes in large files and prevents common recursion errors.
-    *   **`rewrite_file`**: Replaces the entire content of a file, ideal for large-scale changes or creating new files.
+*   **Comprehensive Tool Suite**: The AI has access to 20+ specialized tools organized by category:
+    
+    **File Operations:**
+    *   `create_file` - Create new files with content
+    *   `read_file` - Read complete files or specific line ranges  
+    *   `rewrite_file` - Replace entire file contents
+    *   `insert_content` - Insert content at specific line numbers
+    *   `replace_lines` - Replace specific line ranges
+    *   `create_and_apply_diff` - Efficient line-based file updates
+    *   `rename_file` - Rename files and update references
+    *   `delete_file` - Remove files from project
+    
+    **Directory Operations:**
+    *   `create_folder` - Create new directories
+    *   `rename_folder` - Rename directories  
+    *   `delete_folder` - Remove directories
+    *   `get_project_structure` - Display project file tree
+    
+    **Search & Analysis:**
+    *   `search_code` - Search across all project files
+    *   `search_in_file` - Search within specific files
+    *   `query_codebase` - Semantic code search using AI indexing
+    *   `build_or_update_codebase_index` - Maintain searchable code index
+    
+    **Editor Integration:**
+    *   `get_open_file_content` - Access currently open file
+    *   `get_selected_text` - Get user-selected text
+    *   `replace_selected_text` - Replace selected text
+    *   `get_file_history` - View file modification history
 *   **Multimodal Input**: The AI chat supports both text and image uploads, allowing you to ask questions about visual content.
 *   **Multiple Agent Modes**: Switch between different AI modes (`Code`, `Plan`, `Search`) to tailor the agent's behavior to your specific needs.
 *   **Persistent Model Selection**: The application remembers your chosen AI model across sessions, saving you from having to re-select it on every visit.
@@ -59,7 +86,7 @@ The editor's architecture has been streamlined to use a local Node.js server, si
 
 ## Application Workflow
 
-The following diagram illustrates the core workflow, showing how the browser-based frontend interacts with the local file system, the backend server, and the Gemini AI to execute tasks.
+The following diagram illustrates the core workflow, showing how the browser-based frontend interacts with the local file system, the backend server, and AI providers (Gemini/OpenAI/Ollama) to execute tasks. Note the automatic API key rotation feature for Gemini providers.
 
 ```mermaid
 sequenceDiagram
@@ -67,26 +94,38 @@ sequenceDiagram
     participant Frontend (Browser) as FE
     participant FileSystem API as FS
     participant Backend (Node.js) as BE
-    participant Gemini AI as AI
+    participant LLM Provider as AI
 
-    User->>FE: Enters prompt (e.g., "Read app.js")
-    FE->>AI: Sends user prompt
-
-    alt Client-Side Tool (e.g., read_file)
-        AI-->>FE: Requests tool call: read_file('app.js')
-        FE->>FS: Uses File System Access API
-        FS-->>FE: Returns file content
-        FE-->>AI: Sends tool response
-    else Backend Tool (e.g., run_terminal_command)
-        AI-->>FE: Requests tool call: run_terminal_command('ls -l')
+    User->>FE: Enters prompt (e.g., "Create a new component")
+    FE->>FE: Select Provider (Gemini/OpenAI/Ollama)
+    
+    alt API Key Rotation (Gemini Only)
+        FE->>FE: Load API keys and check rotation
+    end
+    
+    FE->>AI: Send user prompt with tools declaration
+    
+    alt Client-Side File Operations
+        AI-->>FE: Tool call: create_file('component.js', content)
+        FE->>FS: Use File System Access API
+        FS-->>FE: File created successfully
+        FE-->>AI: Send tool response
+        
+        AI-->>FE: Tool call: read_file('component.js')
+        FE->>FS: Read file via File System API
+        FS-->>FE: Return file content
+        FE-->>AI: Send file content
+    else Backend Operations (if needed)
+        AI-->>FE: Tool call: run_terminal_command('npm test')
         FE->>BE: POST /api/execute-tool
-        BE-->>FE: Returns command output
-        FE-->>AI: Sends tool response
+        BE-->>FE: Return command output
+        FE-->>AI: Send command result
     end
 
-    AI->>AI: Processes result & formulates answer
-    AI-->>FE: Streams final response
-    FE->>User: Displays formatted AI response
+    AI->>AI: Process results & formulate response
+    AI-->>FE: Stream final response
+    FE->>FE: Auto-open modified files in editor
+    FE->>User: Display formatted AI response
 ```
 
 ---
@@ -114,20 +153,28 @@ The application includes interactive scripts to handle all aspects of installati
     *   From the menu, select **[2] Start Server**. This will launch the application using `pm2`.
 
 4.  **Access the Application**:
-    *   Open your web browser (e.g., Chrome, Edge) and navigate to **`http://localhost:3000`**.
+    *   Open your web browser (e.g., Chrome, Edge) and navigate to **`http://localhost:3333`**.
 
 The management scripts also provide options to **stop**, **restart**, and **monitor** the server, as well as **enable/disable auto-startup** on system reboot.
 
 ### Configuration
 
-1.  **Add API Keys**:
-    *   In the AI Chat panel, expand the "API Key Settings" section.
-    *   Enter one or more Google Gemini API keys, separated by new lines.
-    *   Click "Save Keys". The keys are stored securely in your browser's IndexedDB.
+1.  **Configure AI Provider**:
+    *   In the AI Chat panel, click the "Settings" gear icon to open LLM Settings
+    *   Choose your preferred provider tab (Gemini, OpenAI, or Ollama)
+    *   **For Gemini**: Enter one or more API keys (separate by new lines for automatic rotation)
+    *   **For OpenAI**: Enter your OpenAI API key and select your preferred model  
+    *   **For Ollama**: Configure your local Ollama instance URL and model name
+    *   Click "Save Settings" - all keys are stored securely in your browser's IndexedDB
 
-2.  **Open a Project**:
-    *   Click the "Open Project Folder" button.
-    *   Select a local directory to work with. The application will remember this folder for future sessions.
+2.  **Select AI Model**:
+    *   **Gemini**: Choose from Gemini 2.5 Pro, 2.5 Flash, 2.5 Flash Lite, or legacy 1.5 models
+    *   **OpenAI**: Select from GPT-4.1, GPT-4o, o1-preview, o1-mini, or other available models
+    *   **Ollama**: Configure your locally-hosted model (e.g., Llama 3, Code Llama)
+
+3.  **Open a Project**:
+    *   Click the "Open Project Folder" button
+    *   Select a local directory to work with - the application will remember this folder for future sessions
 
 ---
 

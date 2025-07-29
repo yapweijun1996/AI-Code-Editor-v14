@@ -2,6 +2,19 @@
 
 This document outlines the plan for developing the next set of advanced features for the IDE.
 
+## Recently Completed Features ✅
+
+| Feature | Description | Status |
+|---|---|---|
+| **Multi-Provider LLM Support** | Added support for OpenAI GPT and Ollama alongside Gemini | ✅ Completed |
+| **Automatic API Key Rotation** | Implemented seamless key rotation for Gemini to handle rate limits | ✅ Completed |
+| **Latest Model Support** | Updated to support Gemini 2.5 series and GPT-4.1/o1 models | ✅ Completed |
+| **Enhanced Tool Suite** | Expanded to 20+ specialized tools for comprehensive file/project management | ✅ Completed |
+| **Message Format Fixes** | Resolved API compatibility issues across all providers | ✅ Completed |
+| **Project Structure Tool** | Fixed and enhanced get_project_structure with proper tree formatting | ✅ Completed |
+
+---
+
 ## 1. AI-Powered Git Management
 
 The goal is to enable the AI agent to perform Git operations based on natural language commands.

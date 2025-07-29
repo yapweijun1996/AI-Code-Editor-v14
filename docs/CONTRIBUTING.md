@@ -62,7 +62,13 @@ The codebase is organized into two main parts: `frontend` and `backend`.
     *   `index.html`: The main entry point.
     *   `js/`: Contains all the JavaScript modules.
         *   `main.js`: Main application logic, event listeners, and initialization.
-        *   `gemini_chat.js`: **(Core AI Logic)** Manages the Gemini model, tool definitions, and the entire chat/tool-calling loop.
+        *   `chat_service.js`: **(Core AI Logic)** Orchestrates multi-provider AI interactions and tool-calling loop.
+        *   `llm/`: LLM provider implementations
+            *   `service_factory.js`: Creates appropriate LLM service instances
+            *   `gemini_service.js`: Google Gemini API integration with key rotation
+            *   `openai_service.js`: OpenAI API integration
+            *   `ollama_service.js`: Local Ollama integration
+            *   `base_llm_service.js`: Abstract base class for all providers
         *   `editor.js`: Manages the Monaco editor instance, tabs, and file state.
         *   `file_system.js`: An abstraction layer for the browser's File System Access API.
         *   `ui.js`: Handles all DOM manipulation, including rendering the file tree and chat messages.
