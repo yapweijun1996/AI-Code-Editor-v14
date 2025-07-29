@@ -334,43 +334,59 @@ export const GeminiChat = {
     async _performApiCall(initialParts, chatMessages) {
         let promptParts = initialParts;
         let running = true;
+        let turnCounter = 0;
         ApiKeyManager.resetTriedKeys();
 
         while (running && !this.isCancelled) {
+            turnCounter++;
             const modelName = document.getElementById('model-selector').value;
+            console.group(`[AI Turn #${turnCounter}]`);
+
             try {
-                console.log(`[AI Turn] Attempting to send with key index: ${ApiKeyManager.currentIndex} using model: ${modelName}`);
+                console.log(`[Attempting to send with key index: ${ApiKeyManager.currentIndex}, model: ${modelName}]`);
+                console.log('[Sending promptParts]:', JSON.parse(JSON.stringify(promptParts)));
+
 
                 if (!this.model) throw new Error('Model not initialized for token counting.');
                 const requestTokenResult = await this.model.countTokens({ contents: [{ role: 'user', parts: promptParts }] });
 
                 const result = await this.chatSession.sendMessageStream(promptParts);
+                console.log('[sendMessageStream] request sent.');
 
                 let fullResponseText = '';
                 let functionCalls = [];
 
+                console.groupCollapsed('[Streaming Response...]');
                 for await (const chunk of result.stream) {
                     if (this.isCancelled) break;
+                    
                     const chunkText = chunk.text();
                     if (chunkText) {
+                        console.log('  - Text chunk received:', chunkText);
                         fullResponseText += chunkText;
                         UI.appendMessage(chatMessages, fullResponseText, 'ai', true);
                     }
+                    
                     const chunkFunctionCalls = chunk.functionCalls();
                     if (chunkFunctionCalls && chunkFunctionCalls.length > 0) {
-                        // Basic validation to prevent malformed data from crashing the stream parser
+                        console.log('  - Function call chunk received:', chunkFunctionCalls);
                         const hasValidCall = chunkFunctionCalls.some(call => call && call.name && typeof call.name === 'string');
                         if (hasValidCall) {
                             functionCalls.push(...chunkFunctionCalls);
                         }
                     }
                 }
+                console.groupEnd();
 
-                if (this.isCancelled) break;
-
-                if (fullResponseText) {
-                    console.log('[AI Reply]', fullResponseText);
+                if (this.isCancelled) {
+                    console.log('[Stream cancelled by user.]');
+                    break;
                 }
+                
+                console.log('[Stream finished.]');
+                console.log('[Final accumulated text]:', fullResponseText);
+                console.log('[Final accumulated function calls]:', JSON.parse(JSON.stringify(functionCalls)));
+
 
                 const responseTokenResult = await this.model.countTokens({
                     contents: [{ role: 'model', parts: [{ text: fullResponseText }] }],
@@ -378,29 +394,54 @@ export const GeminiChat = {
                 UI.updateTokenDisplay(requestTokenResult.totalTokens, responseTokenResult.totalTokens);
 
                 if (functionCalls.length > 0) {
+                    console.groupCollapsed(`[Executing ${functionCalls.length} Tool(s)]`);
                     const toolResults = [];
                     for (const call of functionCalls) {
                         if (this.isCancelled) break;
+                        console.log(` -> Executing tool: ${call.name} with args:`, call.args);
                         const result = await ToolExecutor.execute(call, this.rootDirectoryHandle);
+                        console.log(` <- Tool result for ${call.name}:`, result);
                         toolResults.push(result);
                     }
-                    if (this.isCancelled) break;
+                    console.groupEnd();
+
+                    if (this.isCancelled) {
+                         console.log('[Tool execution cancelled by user.]');
+                        break;
+                    }
+
                     promptParts = toolResults.map((toolResult) => {
+                        const MAX_CONTENT_LENGTH = 100000; // 100k chars
+                        let response = toolResult.toolResponse.response;
+
+                        if (response && typeof response.content === 'string' && response.content.length > MAX_CONTENT_LENGTH) {
+                            console.warn(`Tool response content for '${toolResult.toolResponse.name}' is too long (${response.content.length} chars). Truncating to ${MAX_CONTENT_LENGTH}.`);
+                            response = {
+                                ...response,
+                                content: response.content.substring(0, MAX_CONTENT_LENGTH) + "\n\n... (Content truncated due to size) ...",
+                                truncated: true
+                            };
+                        }
+
                         return {
                             functionResponse: {
                                 name: toolResult.toolResponse.name,
-                                response: toolResult.toolResponse.response,
+                                response: response,
                             },
                         };
                     });
+                     console.log('[Finished processing tool results. Looping back to send to model.]');
                 } else {
+                    running = false; // End the loop if there are no more function calls
+                     console.log('[No function calls in response. Ending turn.]');
                     if (!fullResponseText) {
-                        const errorMessage = `[The AI model returned an empty response. This might be due to a tool's output. Check the console for details and try again.]`;
-                        const errorMsg = 'The AI model returned an empty response. This might be due to a tool\'s output. Check the console for details and try again.';
+                        console.groupCollapsed('[Empty Response Debug Info]');
+                        console.error("The AI model returned an empty text response and no function calls. This can happen if the model's safety filters were triggered or if there was an issue with processing the tool output from the previous turn.");
+                        console.log("Last promptParts sent to model:", JSON.parse(JSON.stringify(initialParts)));
+                        console.groupEnd();
+                        const errorMsg = 'The AI model returned an empty response. This might be due to a tool\'s output or a safety filter. Check the console for details.';
                         UI.showError(errorMsg);
-                        console.error(errorMsg);
                     }
-                    running = false;
                     const fullHistory = await this.chatSession.getHistory();
                     await DbManager.saveChatHistory(fullHistory);
                 }
@@ -422,6 +463,8 @@ export const GeminiChat = {
                     await this._restartSessionWithHistory(history);
                     this.lastRequestTime = Date.now();
                 }
+            } finally {
+                console.groupEnd(); // End of AI Turn group
             }
         }
     },
