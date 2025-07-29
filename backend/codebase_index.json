@@ -29485,6 +29485,7 @@
   ],
   "frontend\\index.html": [
     "#error-container",
+    "#toast-container",
     "#split-container",
     "#file-tree-container",
     "#files-tab",
@@ -29510,6 +29511,9 @@
     "#tab-bar",
     "#editor",
     "#chat-panel",
+    "#llm-status-container",
+    "#llm-provider-status",
+    "#settings-toggle-button",
     "#token-usage-display",
     "#token-request",
     "#token-response",
@@ -29517,7 +29521,6 @@
     "#chat-messages",
     "#chat-input-container",
     "#chat-toolbar",
-    "#model-selector",
     "#agent-mode-selector",
     "#view-context-button",
     "#condense-context-button",
@@ -29537,12 +29540,17 @@
     "#chat-send-button",
     "#chat-cancel-button",
     "#thinking-indicator",
-    "#chat-settings",
-    "#api-keys-textarea",
-    "#rate-limiter-setting",
-    "#rate-limit-slider",
-    "#rate-limit-input",
-    "#save-keys-button",
+    "#llm-settings-panel",
+    "#gemini-settings",
+    "#gemini-api-keys",
+    "#gemini-model-selector",
+    "#openai-settings",
+    "#openai-api-key",
+    "#openai-model-selector",
+    "#ollama-settings",
+    "#ollama-base-url",
+    "#ollama-model-name",
+    "#save-llm-settings-button",
     "#theme-toggle-button",
     "#context-modal",
     "#context-display",
@@ -29574,10 +29582,23 @@
     ".search-button",
     ".main-content",
     ".chat-header",
+    ".status-label",
+    ".header-toolbar",
     ".toolbar-group",
     ".dropdown",
     ".dropdown-button",
     ".dropdown-content",
+    ".settings-tabs",
+    ".tab-link",
+    ".tab-content",
+    ".form-group",
+    ".api-key-wrapper",
+    ".api-key-textarea",
+    ".toggle-visibility-button",
+    ".model-selector",
+    ".api-key-input",
+    ".settings-input",
+    ".settings-actions",
     ".modal",
     ".modal-content",
     ".close-button",
@@ -29589,6 +29610,49 @@
     "BaseLLMService"
   ],
   "frontend/js/llm/service_factory.js": [
+    "LLMServiceFactory"
+  ],
+  "docs\\ARCHITECTURE.md": [
+    "Application Architecture",
+    "Core Philosophy: Client-Centric Design",
+    "Component Overview",
+    "Frontend Code Logic Flow",
+    "Multi-Provider LLM Architecture",
+    "Provider Hierarchy",
+    "API Key Rotation (Gemini Only)",
+    "End-to-End Workflow",
+    "State Management",
+    "System Stability and Error Handling",
+    "Custom Rule Injection Workflow",
+    "High-Performance Diffing Architecture"
+  ],
+  "docs\\CONTRIBUTING.md": [
+    "Contributing to the AI Code Editor",
+    "1. Core Architecture & Philosophy",
+    "End-to-End Workflow",
+    "2. Project Structure",
+    "3. Development Setup & Workflow",
+    "Prerequisites",
+    "Installation and Running",
+    "4. Coding Standards"
+  ],
+  "docs\\ROADMAP.md": [
+    "Incremental Implementation Roadmap for Advanced Features",
+    "Recently Completed Features ✅",
+    "1. AI-Powered Git Management",
+    "2. Enhanced Search and Replace",
+    "3. Enhanced Task Runner"
+  ],
+  "frontend\\js\\editor.js": [
+    "getLanguageFromExtension"
+  ],
+  "frontend\\js\\task_runner.js": [
+    "TaskRunner"
+  ],
+  "frontend\\js\\llm\\base_llm_service.js": [
+    "BaseLLMService"
+  ],
+  "frontend\\js\\llm\\service_factory.js": [
     "LLMServiceFactory"
   ]
 }
